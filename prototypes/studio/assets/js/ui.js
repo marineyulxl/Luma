@@ -5,6 +5,11 @@
   const S = L.Store;
   const doc = global.document;
 
+  const languageKey = 'luma-studio-language';
+  const language = global.localStorage.getItem(languageKey) === 'en' ? 'en' : 'zh-CN';
+  doc.documentElement.lang = language;
+  const t = (zh, en) => language === 'en' ? en : zh;
+
   /* ---------- DOM 辅助 ---------- */
   function h(tag, attrs) {
     const el = doc.createElement(tag);
@@ -56,7 +61,7 @@
     if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm;
     return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
   }
-  function fmtDateLong(d) { return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日　星期' + '日一二三四五六'[d.getDay()]; }
+  function fmtDateLong(d) { if (language === "en") return new Intl.DateTimeFormat("en", { dateStyle: "full" }).format(d); return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日　星期' + '日一二三四五六'[d.getDay()]; }
   function fmtStamp(d) { return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()); }
   function fmtSize(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
 
@@ -256,11 +261,12 @@
 
   /* ---------- 页面外壳 ---------- */
   const NAV = [
-    { key: 'home', label: '首页', icon: 'home', href: 'index.html' },
-    { key: 'inbox', label: '收集箱', icon: 'inbox', href: 'inbox.html' },
-    { key: 'spaces', label: '知识空间', icon: 'layers', href: 'spaces.html' },
-    { key: 'imports', label: '导入中心', icon: 'download', href: 'imports.html' },
-    { key: 'learning', label: '学习中心', icon: 'book', href: 'learning.html' }
+    { key: 'home', label: t('首页', 'Home'), icon: 'home', href: 'index.html' },
+    { key: 'inbox', label: t('收集箱', 'Inbox'), icon: 'inbox', href: 'inbox.html' },
+    { key: 'spaces', label: t('知识空间', 'Spaces'), icon: 'layers', href: 'spaces.html' },
+    { key: 'threads', label: t('思考脉络', 'Thought threads'), icon: 'link', href: 'threads.html' },
+    { key: 'imports', label: t('导入中心', 'Imports'), icon: 'download', href: 'imports.html' },
+    { key: 'learning', label: t('学习中心', 'Learning'), icon: 'book', href: 'learning.html' }
   ];
   const EXPAND_KEY = 'luma-studio-proto-expanded-v1';
   const Shell = {
@@ -269,7 +275,7 @@
       if (!L.Auth.isLoggedIn()) { global.location.replace('login.html?next=' + encodeURIComponent(global.location.pathname.split('/').pop() + global.location.search)); return null; }
       Shell.ctx = cfg; Guard.init();
       const root = doc.getElementById('app');
-      Shell.sidebarEl = h('aside', { class: 'sidebar', 'aria-label': '主导航' });
+      Shell.sidebarEl = h('aside', { class: 'sidebar', id: 'studio-navigation', 'aria-label': t('主导航', 'Main navigation') });
       Shell.topEl = h('header', { class: 'topbar' });
       Shell.mainEl = h('main', { id: 'main' }, Shell.topEl);
       root.appendChild(Shell.sidebarEl); root.appendChild(Shell.mainEl);
@@ -280,20 +286,47 @@
       return body;
     },
     renderTop(crumbs) {
-      clear(Shell.topEl); Shell.topEl.appendChild(h('span', null, h('a', { href: 'index.html', text: 'Studio' })));
+      clear(Shell.topEl);
+      const toggle = h('button', { class: 'mobile-nav-toggle', type: 'button', 'aria-controls': 'studio-navigation', 'aria-expanded': 'false', }, h('span', { class: 'mobile-more-icon', 'aria-hidden': 'true', text: '···' }), h('span', { text: t('更多', 'More') }));
+      const close = () => { Shell.sidebarEl.classList.remove('mobile-open'); toggle.setAttribute('aria-expanded', 'false'); };
+      toggle.addEventListener('click', () => {
+        const open = Shell.sidebarEl.classList.toggle('mobile-open');
+        toggle.setAttribute('aria-expanded', String(open));
+      });
+      doc.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && Shell.sidebarEl.classList.contains('mobile-open')) { close(); toggle.focus(); }
+      });
+      Shell.sidebarEl.addEventListener('click', (e) => { if (e.target.closest('a')) close(); });
+      const mobileLinks = [NAV[0], { label: t('搜索', 'Search'), href: 'search.html', icon: 'search' }, NAV[1]];
+      const currentPath = global.location.pathname.split('/').pop();
+      const mobileNav = h('nav', { class: 'mobile-tabbar', 'aria-label': t('快捷导航', 'Quick navigation') },
+        mobileLinks.map((item) => h('a', {
+          href: item.href, 'aria-current': currentPath === item.href ? 'page' : null
+        }, I(item.icon, 19), h('span', { text: item.label }))), toggle);
+      Shell.mainEl.appendChild(mobileNav);
+      Shell.topEl.appendChild(h('span', null, h('a', { href: 'index.html', text: 'Studio' })));
       (crumbs || []).forEach((c) => { Shell.topEl.appendChild(h('span', { class: 'slash', text: '/' })); Shell.topEl.appendChild(c.href ? h('a', { href: c.href, text: c.label }) : h('span', { text: c.label })); });
-      Shell.topEl.appendChild(h('span', { class: 'prototype-label', text: '交互原型 · 数据仅保存在当前浏览器' }));
+      Shell.topEl.appendChild(h('button', {
+        class: 'language-toggle', type: 'button', text: t('English', '简体中文'),
+        onclick: async () => {
+          if (Guard.dirty && !(await Guard.confirmLeave())) return;
+          global.localStorage.setItem(languageKey, t('en', 'zh-CN'));
+          Guard.dirty = false;
+          global.location.reload();
+        }
+      }));
+      Shell.topEl.appendChild(h('span', { class: 'prototype-label', text: t('交互原型 · 数据仅保存在当前浏览器', 'Prototype · Data stays in this browser') }));
     },
     renderSidebar() {
       const cfg = Shell.ctx || {}; const sb = clear(Shell.sidebarEl);
       const expanded = JSON.parse(global.sessionStorage.getItem(EXPAND_KEY) || '{}');
       const owner = L.Auth.owner(); const inbox = S.inboxCount(); const curSpace = cfg.spaceId || ''; const curCat = cfg.categoryId || '';
       sb.appendChild(h('a', { class: 'brand', href: 'index.html', 'aria-label': 'Luma 灵脑 Studio 首页' }, h('img', { src: 'assets/img/luma-mark.png', alt: '' }), h('span', null, 'Luma 灵脑 ', h('em', { text: 'Studio' }))));
-      sb.appendChild(h('a', { class: 'search-launch', href: 'search.html' }, I('search', 19), h('span', { text: '搜索记录、知识与空间…' }), h('kbd', { text: 'Ctrl K' })));
-      sb.appendChild(h('a', { class: 'primary new-note', href: 'index.html#new' }, I('plus', 22), h('span', { text: '新建记录' })));
-      sb.appendChild(h('nav', { 'aria-label': '功能' }, NAV.map((n) => h('a', { class: 'nav-item' + (cfg.nav === n.key ? ' active' : ''), href: n.href, 'aria-current': cfg.nav === n.key ? 'page' : null },
+      sb.appendChild(h('a', { class: 'search-launch', href: 'search.html' }, I('search', 19), h('span', { text: t('搜索记录、知识与空间…', 'Search notes and spaces…') }), h('kbd', { text: 'Ctrl K' })));
+      sb.appendChild(h('a', { class: 'primary new-note', href: 'index.html#new' }, I('plus', 22), h('span', { text: t('新建记录', 'New note') })));
+      sb.appendChild(h('nav', { 'aria-label': t('功能', 'Studio sections') }, NAV.map((n) => h('a', { class: 'nav-item' + (cfg.nav === n.key ? ' active' : ''), href: n.href, 'aria-current': cfg.nav === n.key ? 'page' : null },
         I(n.icon, 21), h('span', { text: n.label }), n.key === 'inbox' && inbox > 0 ? h('b', { class: 'count', text: String(inbox) }) : null))));
-      const tree = h('div', { class: 'spaces-nav' }, h('div', { class: 'nav-label', text: '我的空间' }));
+      const tree = h('div', { class: 'spaces-nav' }, h('div', { class: 'nav-label', text: t('我的空间', 'My spaces') }));
       const catNodes = (spaceId, parentId, depth) => S.childCategories(spaceId, parentId).map((c) => h('div', null,
         h('a', { class: 'category' + (curCat === c.id ? ' chosen' : ''), style: 'padding-left:' + (36 + depth * 14) + 'px', href: 'space.html?id=' + spaceId + '&cat=' + c.id, text: c.name }),
         catNodes(spaceId, c.id, depth + 1)));
@@ -305,24 +338,24 @@
             I('chevronDown', 15))));
         if (isOpen) tree.appendChild(h('div', null, catNodes(s.id, '', 0)));
       });
-      if (!S.listSpaces().length) tree.appendChild(h('p', { class: 'hint', text: '还没有知识空间' }));
+      if (!S.listSpaces().length) tree.appendChild(h('p', { class: 'hint', text: t('还没有知识空间', 'No spaces yet') }));
       sb.appendChild(tree);
       sb.appendChild(h('div', { class: 'sidebar-bottom' },
-        h('a', { class: 'nav-item' + (cfg.nav === 'settings' ? ' active' : ''), href: 'settings.html' }, I('settings', 21), h('span', { text: '设置' })),
-        h('a', { class: 'nav-item' + (cfg.nav === 'trash' ? ' active' : ''), href: 'trash.html' }, I('trash', 21), h('span', { text: '回收站' })),
-        h('div', { class: 'profile' }, h('span', { class: 'avatar', text: owner.displayName.slice(0, 1) }), h('span', { text: owner.displayName }), h('span', { class: 'private-note', text: '私人工作室' }),
-          h('button', { class: 'icon-button', type: 'button', title: '退出登录', 'aria-label': '退出登录', onclick: async () => {
+        h('a', { class: 'nav-item' + (cfg.nav === 'settings' ? ' active' : ''), href: 'settings.html' }, I('settings', 21), h('span', { text: t('设置', 'Settings') })),
+        h('a', { class: 'nav-item' + (cfg.nav === 'trash' ? ' active' : ''), href: 'trash.html' }, I('trash', 21), h('span', { text: t('回收站', 'Trash') })),
+        h('div', { class: 'profile' }, h('span', { class: 'avatar', text: owner.displayName.slice(0, 1) }), h('span', { text: owner.displayName }), h('span', { class: 'private-note', text: t('私人工作室', 'Private studio') }),
+          h('button', { class: 'icon-button', type: 'button', title: t('退出登录', 'Sign out'), 'aria-label': t('退出登录', 'Sign out'), onclick: async () => {
             if (Guard.dirty && !(await Guard.confirmLeave())) return;
             Guard.dirty = false; L.Auth.logout(); global.location.href = 'login.html'; } }, I('logout', 18)))));
     },
     /** 设置区域的页签：账户 / 外观 / 数据管理 */
     settingsTabs(active) {
-      const tabs = [['account', '账户', 'settings.html'], ['appearance', '外观', 'appearance.html'], ['data', '数据管理', 'data.html']];
-      return h('div', { class: 'tabs', role: 'navigation', 'aria-label': '设置分区' }, tabs.map((t) => h('a', { href: t[2], class: active === t[0] ? 'selected' : '', 'aria-current': active === t[0] ? 'page' : null, text: t[1] })));
+      const tabs = [['account', t('账户', 'Account'), 'settings.html'], ['appearance', t('外观', 'Appearance'), 'appearance.html'], ['data', t('数据管理', 'Data management'), 'data.html']];
+      return h('div', { class: 'tabs', role: 'navigation', 'aria-label': t('设置分区', 'Settings sections') }, tabs.map((t) => h('a', { href: t[2], class: active === t[0] ? 'selected' : '', 'aria-current': active === t[0] ? 'page' : null, text: t[1] })));
     }
   };
 
-  L.UI = { h, I, clear, debounce, qs, selectEl, downloadText, fmtTime, fmtDateLong, fmtStamp, fmtSize, stripMd, highlight, snippet, esc, renderMarkdown, studioWiki, publicWiki,
+  L.UI = { t, h, I, clear, debounce, qs, selectEl, downloadText, fmtTime, fmtDateLong, fmtStamp, fmtSize, stripMd, highlight, snippet, esc, renderMarkdown, studioWiki, publicWiki,
     toast, dialog, confirmDialog, alertDialog, formDialog, Guard, paginate, pager, noteRow, rowAction, emptyState, contentMeta, publishPill };
   L.Shell = Shell;
 })(window);

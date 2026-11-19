@@ -74,12 +74,73 @@
   function renderPreview() {
     previewEl.innerHTML = U.renderMarkdown(bodyTa.value, U.studioWiki) || '<p style="color:var(--muted)">暂无正文。</p>'; // 内容已在 renderMarkdown 中转义
   }
-  function setMode(m) {
-    mode = m; bodyTa.hidden = m !== 'edit'; previewEl.hidden = m === 'edit'; if (m === 'preview') renderPreview();
-    modeBtns.forEach((b) => { b.classList.toggle('selected', b.dataset.mode === m); b.setAttribute('aria-pressed', String(b.dataset.mode === m)); }); toolsWrap.style.visibility = m === 'edit' ? 'visible' : 'hidden';
+  let richEditor;
+  const richBody = h('div', { class: 'rich-note', hidden: true });
+  const richTools = h('div', { class: 'format-tools', role: 'group', 'aria-label': '正文格式', hidden: true });
+  function setMode(m, automatic = false) {
+    if (m === 'rich') {
+      if (!richEditor) return;
+      richEditor.commands.setContent(bodyTa.value, { contentType: 'markdown', emitUpdate: false });
+      // 原型以 Markdown 为准。不能无损往返的内容留在源码模式。
+      if (richEditor.getMarkdown().trim() !== bodyTa.value.trim()) {
+        if (!automatic) U.toast('这篇笔记含有暂不支持保真转换的格式，请用 Markdown 编辑。');
+        return;
+      }
+      refreshRichTools();
+    }
+    closePicker();
+    mode = m; bodyTa.hidden = m !== 'edit'; richBody.hidden = m !== 'rich'; previewEl.hidden = m !== 'preview';
+    if (m === 'preview') renderPreview();
+    modeBtns.forEach((b) => { b.classList.toggle('selected', b.dataset.mode === m); b.setAttribute('aria-pressed', String(b.dataset.mode === m)); });
+    toolsWrap.hidden = m !== 'edit';
+    richTools.hidden = m !== 'rich';
   }
-  const modeBtns = [['edit', '编辑'], ['preview', '预览']].map(([m, label]) => h('button', { type: 'button', dataset: { mode: m }, text: label, onclick: () => setMode(m) }));
+  const modeBtns = [['rich', '可视化'], ['edit', 'Markdown'], ['preview', '预览']].map(([m, label]) =>
+    h('button', { type: 'button', dataset: { mode: m }, disabled: m === 'rich', text: label, onclick: () => setMode(m) }));
   const toolsWrap = h('div', null, L.EditTools.toolbar(bodyTa));
+  const formats = [
+    ['二级标题', 'H2', 'toggleHeading', 'heading', { level: 2 }],
+    ['加粗', 'B', 'toggleBold', 'bold'],
+    ['斜体', 'I', 'toggleItalic', 'italic'],
+    ['项目列表', '列表', 'toggleBulletList', 'bulletList'],
+    ['编号列表', '编号', 'toggleOrderedList', 'orderedList'],
+    ['引用', '引用', 'toggleBlockquote', 'blockquote'],
+    ['代码块', '代码', 'toggleCodeBlock', 'codeBlock']
+  ];
+  const richButtons = formats.map(([label, text, command, , attrs]) => {
+    const button = h('button', { type: 'button', text, 'aria-label': label, title: label,
+      onclick: () => richEditor.chain().focus()[command](attrs).run() });
+    richTools.appendChild(button);
+    return button;
+  });
+  function refreshRichTools() {
+    formats.forEach(([, , , mark, attrs], i) => richButtons[i].setAttribute('aria-pressed', String(richEditor.isActive(mark, attrs))));
+  }
+  async function loadRichEditor() {
+    try {
+      const [{ Editor }, { default: StarterKit }, { Markdown }] = await Promise.all([
+        import('https://cdn.jsdelivr.net/npm/@tiptap/core@3.31.3/+esm'),
+        import('https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@3.31.3/+esm'),
+        import('https://cdn.jsdelivr.net/npm/@tiptap/markdown@3.31.3/+esm')
+      ]);
+      richEditor = new Editor({
+        element: richBody, extensions: [StarterKit.configure({ link: { openOnClick: false } }), Markdown],
+        editorProps: { attributes: { role: 'textbox', 'aria-label': '笔记正文', 'aria-multiline': 'true' } },
+        onUpdate: ({ editor }) => {
+          if (mode !== 'rich') return;
+          bodyTa.value = editor.getMarkdown();
+          change({ body: bodyTa.value });
+          refreshRichTools();
+        },
+        onSelectionUpdate: () => { if (richEditor) refreshRichTools(); }
+      });
+      modeBtns[0].disabled = false;
+      if (mode === 'edit' && document.activeElement !== bodyTa && !Object.keys(pending).length) setMode('rich', true);
+    } catch (error) {
+      modeBtns[0].title = '可视化编辑器加载失败，可继续使用 Markdown';
+      console.warn('可视化编辑器加载失败', error);
+    }
+  }
 
   /* ---------- [[ 关联选择器 ---------- */
   let pickerState = { open: false, start: 0, items: [], index: 0 };
@@ -303,8 +364,9 @@
       h('div', { class: 'edit-actions' }, statusEl, h('button', { class: 'icon-button', type: 'button', title: '移入回收站', 'aria-label': '移入回收站', onclick: removeContent }, I('trash', 20)), saveBtn)),
     h('div', { class: 'editor-layout' },
       h('article', { class: 'document' }, bannerEl, titleIn, metaEl,
-        h('div', { class: 'doc-toolbar' }, h('div', { class: 'segmented', role: 'group', 'aria-label': '编辑模式' }, modeBtns), toolsWrap),
-        bodyTa, previewEl, pickerEl),
+        h('div', { class: 'doc-toolbar' }, h('div', { class: 'segmented', role: 'group', 'aria-label': '编辑模式' }, modeBtns), toolsWrap, richTools),
+        bodyTa, richBody, previewEl, pickerEl),
       propsEl)));
   renderMeta(); renderBanner(); renderProps(); setStatus('saved');
+  loadRichEditor();
 })();
