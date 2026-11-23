@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>灵脑 · 记录逻辑</title>
+<style>
+:root { color-scheme:light; --bg:#f8fafc; --paper:#fff; --text:#202936; --muted:#526075; --line:#e0e6ef; --accent:#495c91; --soft:#e5ebfa; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 system-ui,"Microsoft YaHei",sans-serif; }
+main { max-width:1050px; margin:auto; padding:32px 24px 56px; }
+header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+h1 { font-size:26px; margin:0; } h2 { font-size:20px; margin:0 0 12px; } h3 { font-size:16px; margin:0 0 8px; }
+p { margin:8px 0; } small,.muted { color:var(--muted); }
+section { margin-top:28px; padding:22px; border:1px solid var(--line); border-radius:12px; background:var(--paper); }
+.flow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:24px 0; }
+.flow strong { padding:10px 18px; border-radius:8px; background:var(--soft); color:var(--accent); }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+article { padding:16px; border:1px solid var(--line); border-radius:8px; }
+table { width:100%; border-collapse:collapse; text-align:left; }
+th,td { padding:12px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-size:13px; }
+.scroll { overflow-x:auto; } .scroll table { min-width:620px; }
+.example { border-left:3px solid var(--accent); padding-left:16px; }
+button { font:inherit; background:var(--paper); border:1px solid var(--line); padding:6px 12px; border-radius:6px; cursor:pointer; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(max-width:650px) { main { padding:20px 16px; } section { padding:16px; } .grid { grid-template-columns:1fr; } .flow { gap:8px; } .flow strong { padding:8px 10px; } }
+@media print { button { display:none; } section,article { break-inside:avoid; } body { background:white; } }
+.loop-node { cursor:pointer; } .loop-node rect { fill:#fff; stroke:#c5cfdf; } .loop-node:hover rect,.loop-node[aria-pressed="true"] rect { fill:#e5ebfa; stroke:#495c91; } #node-detail { border-top:1px solid var(--line); margin-top:12px; padding-top:16px; }
+
+/* 图表与正文的完整视觉层级。 */
+body { background:#f3f5f9; }
+main { max-width:1190px; padding:32px 35px 56px; }
+header { margin-bottom:24px; }
+header h1 { font-size:22px; letter-spacing:-.4px; }
+section { padding:24px 26px; border-color:#dfe5ee; box-shadow:0 2px 6px #26365004; }
+.diagram-panel { padding:0; overflow:hidden; }
+.diagram-panel > h2 { margin:0; padding:20px 24px 0; font-size:17px; }
+.diagram-panel > .muted { margin:6px 24px 12px; font-size:12px; }
+.diagram-panel .scroll { padding:6px 12px 12px; background:#fff; }
+.loop-node rect { fill:#fff; stroke:#ccd5e3; stroke-width:1.2; transition:fill .15s,stroke .15s; }
+.loop-node text { font-family:inherit; fill:#263348; }
+.loop-node text:last-child { fill:#6a778c; }
+.loop-node:hover rect { fill:#f4f6fc; stroke:#7b8db7; }
+.loop-node[aria-pressed="true"] rect { fill:#e8edfa; stroke:#495c91; stroke-width:1.8; }
+.loop-node.public-node rect { fill:#faf8fc; stroke:#ddd4e9; }
+.loop-node.public-node:hover rect,.loop-node.public-node[aria-pressed="true"] rect { fill:#eee7f6; stroke:#806394; }
+.loop-node.data-node rect { fill:#f4f8fc; stroke:#ccddeb; }
+.loop-node.data-node:hover rect,.loop-node.data-node[aria-pressed="true"] rect { fill:#e7f0f9; stroke:#527da2; }
+.loop-node:focus-visible rect { stroke:#495c91; stroke-width:3; }
+#node-detail { display:grid; grid-template-columns:190px 1fr; align-items:start; gap:24px; min-height:110px; padding:22px 26px; margin:0; background:#f0f3fa; border-top:1px solid #dfe5ee; }
+#node-detail h3 { margin:0; color:#3d5084; font-size:17px; }
+#node-detail p { margin:0; color:#526075; font-size:14px; }
+section h2 { color:#263348; }
+article { background:#f9fafd; border-color:#e2e7f0; }
+thead { background:#f2f5fa; }
+th { font-weight:600; color:#4d5f7b; }
+td { font-size:14px; }
+tbody tr:last-child td { border-bottom:0; }
+.example { padding:12px 20px; border-radius:0 8px 8px 0; background:#f2f5fc; }
+button:hover { background:#e8edfa; border-color:#8191b6; }
+@media(max-width:650px) {
+ main { padding:20px 16px 36px; }
+ section { padding:18px; }
+ .diagram-panel { padding:0; }
+ #node-detail { grid-template-columns:1fr; gap:8px; padding:18px; }
+}
+
+body { background:#f4f6fa; }
+main { max-width:1220px; padding:38px 40px 64px; }
+header { margin-bottom:26px; }
+.brand-lockup { display:flex; align-items:center; gap:14px; }
+.brand-symbol { width:46px; height:46px; display:grid; place-items:center; border-radius:13px; background:#445983; color:white; font-size:24px; font-weight:600; box-shadow:0 5px 15px #44598320; }
+.brand-name { display:block; color:#6b778b; font-size:12px; margin-bottom:1px; }
+header h1 { font-size:25px; line-height:1.3; letter-spacing:-.5px; }
+header button { font-size:12px; padding:8px 14px; background:transparent; color:#526075; }
+.page-context { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:22px; }
+.page-context > span { font-size:12px; color:#485c85; padding:5px 12px; background:#e9edf6; border-radius:6px; }
+.page-context small { margin-left:auto; font-size:12px; }
+section { margin-top:20px; border-radius:16px; padding:26px 30px; background:#fff; box-shadow:0 3px 14px #20304704; }
+section > h2 { font-size:20px; letter-spacing:-.3px; margin-bottom:14px; }
+section > p { max-width:860px; font-size:14px; color:#526075; }
+.diagram-panel { border-radius:18px; border-color:#d4ddea; box-shadow:0 8px 32px #253b6008; }
+.diagram-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 26px 0; flex-wrap:wrap; }
+.diagram-heading h2 { font-size:17px; margin:0; }
+.diagram-legend { display:flex; gap:16px; font-size:11px; color:#637086; }
+.diagram-legend span { display:inline-flex; align-items:center; gap:6px; }
+.diagram-legend span::before { content:''; width:7px; height:7px; border-radius:50%; background:#7286b0; }
+.diagram-legend span:nth-child(2)::before { background:#a488b5; }
+.diagram-legend span:nth-child(3)::before { background:#709cbb; }
+.diagram-panel > .muted { margin:8px 26px 0; }
+.diagram-panel .scroll { background:radial-gradient(circle,#dce3ed 1px,transparent 1px); background-size:20px 20px; padding:14px 18px; }
+.loop-node rect { filter:drop-shadow(0 2px 3px #243a5710); }
+.loop-node:hover rect { stroke-width:1.8; }
+#node-detail { background:#f0f3f9; padding:24px 28px; min-height:108px; }
+#node-detail h3 { font-size:18px; }
+#node-detail p { line-height:1.85; }
+.grid { gap:18px; margin-top:16px; }
+article { padding:22px; border-radius:12px; background:#f8fafd; border:1px solid #e3e9f2; }
+article h3 { font-size:16px; color:#334c77; }
+article p { font-size:14px; color:#526075; line-height:1.85; }
+.scroll table { border:1px solid #e5eaf2; border-radius:10px; overflow:hidden; border-collapse:separate; border-spacing:0; }
+th,td { padding:15px 16px; }
+td:first-child { font-weight:500; color:#334869; }
+.example { margin-top:16px; padding:20px 24px; background:#f0f4fb; border-radius:12px; border-left:3px solid #6981b1; }
+.example ul { padding-left:20px; color:#526075; font-size:14px; }
+.example li + li { margin-top:8px; }
+.scope-panel { background:transparent; border-style:dashed; box-shadow:none; }
+.scope-panel h2 { font-size:15px; }
+@media(min-width:950px) {
+ main { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+ main > header, main > .page-context, main > .diagram-panel, main > section:has(table), main > section:has(.example), main > .scope-panel { grid-column:1 / -1; }
+ main > header { margin-bottom:0; }
+ main > .page-context { margin:0; }
+ main > section { margin:0; }
+ main > section > .grid { grid-template-columns:1fr; }
+}
+@media(max-width:650px) {
+ main { padding:22px 16px 40px; }
+ section { padding:20px; border-radius:12px; }
+ .diagram-panel { padding:0; }
+ .diagram-heading { padding:20px 18px 0; gap:12px; }
+ .diagram-panel > .muted { margin:8px 18px; }
+ .diagram-legend { gap:12px; }
+ .page-context small { flex-basis:100%; margin:4px 0 0; }
+ header h1 { font-size:22px; }
+ article { padding:18px; }
+}
+@media print { main { display:block; } .diagram-panel .scroll { background:white; } }
+</style>
+</head>
+<body><main>
+<header><div class="brand-lockup"><span class="brand-symbol" aria-hidden="true">L</span><div><span class="brand-name">Luma 灵脑</span><h1>记录逻辑</h1></div></div><button type="button" onclick="window.print()">打印 / PDF</button></header>
+<div class="page-context"><span>保存</span><span>归类</span><span>关联</span><span>使用</span><small>讨论方案 · 原型待同步</small></div>
+<section class="diagram-panel"><div class="diagram-heading"><h2>记录如何流转</h2><div class="diagram-legend"><span>私人内容</span><span>公开表达</span><span>数据保护</span></div></div><p class="muted">点击节点查看说明。虚线表示按需操作，保存后可直接搜索使用。</p><div class="scroll"><svg viewBox="0 0 1000 865" style="display:block;width:100%;min-width:840px" role="group" aria-label="灵脑产品闭环"><defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8" fill="#899db9"/></marker></defs><path d="M135 105V125H460V150" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M365 105V125H460V150" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M595 105V125H460V150" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M825 105V125H460V150" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M460 224V260" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5 4"/><path d="M460 334V370" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5 4"/><path d="M460 444V480" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5 4"/><path d="M460 554V590" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5 4"/><path d="M460 664V700" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M320 737H235" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M35 737H12V74H35" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M320 408H273V517H235" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M135 554V590" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M235 627H293V426H320" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5 4"/><path d="M600 408H700" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M830 444V480" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M830 554V590" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><path d="M960 632H983V352H650V386H600" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5 4"/><path d="M600 436H636V627H600" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5 4"/><path d="M320 187H280V627H320" fill="none" stroke="#899db9" stroke-width="1.5" marker-end="url(#arrow)"/><g class="loop-node" data-node="capture" role="button" tabindex="0" aria-pressed="false" aria-label="快速记录"><rect x="35" y="43" width="200" height="62" rx="9"/><text x="135.0" y="72" text-anchor="middle" font-size="14" font-weight="600">快速记录</text><text x="135.0" y="94" text-anchor="middle" font-size="11" fill="#526075">正文先保存，属性可后补</text></g><g class="loop-node" data-node="file" role="button" tabindex="0" aria-pressed="false" aria-label="文件导入"><rect x="265" y="43" width="200" height="62" rx="9"/><text x="365.0" y="72" text-anchor="middle" font-size="14" font-weight="600">文件导入</text><text x="365.0" y="94" text-anchor="middle" font-size="11" fill="#526075">保留文件来源与批次</text></g><g class="loop-node" data-node="web" role="button" tabindex="0" aria-pressed="false" aria-label="网页保存"><rect x="495" y="43" width="200" height="62" rx="9"/><text x="595.0" y="72" text-anchor="middle" font-size="14" font-weight="600">网页保存</text><text x="595.0" y="94" text-anchor="middle" font-size="11" fill="#526075">链接 / 可获取正文 / 摘要</text></g><g class="loop-node" data-node="chat" role="button" tabindex="0" aria-pressed="false" aria-label="AI 对话导入"><rect x="725" y="43" width="200" height="62" rx="9"/><text x="825.0" y="72" text-anchor="middle" font-size="14" font-weight="600">AI 对话导入</text><text x="825.0" y="94" text-anchor="middle" font-size="11" fill="#526075">角色 / 时间 / 来源</text></g><g class="loop-node" data-node="inbox" role="button" tabindex="0" aria-pressed="false" aria-label="保存记录"><rect x="320" y="150" width="280" height="74" rx="9"/><text x="460.0" y="179" text-anchor="middle" font-size="16" font-weight="600">保存记录</text><text x="460.0" y="201" text-anchor="middle" font-size="11" fill="#526075">默认私有 · 自动记录时间</text></g><g class="loop-node" data-node="organize" role="button" tabindex="0" aria-pressed="false" aria-label="归类（可选）"><rect x="320" y="260" width="280" height="74" rx="9"/><text x="460.0" y="289" text-anchor="middle" font-size="16" font-weight="600">归类（可选）</text><text x="460.0" y="311" text-anchor="middle" font-size="11" fill="#526075">一个位置 / 多个标签</text></g><g class="loop-node" data-node="content" role="button" tabindex="0" aria-pressed="false" aria-label="编辑与保存原文"><rect x="320" y="370" width="280" height="74" rx="9"/><text x="460.0" y="399" text-anchor="middle" font-size="16" font-weight="600">编辑与保存原文</text><text x="460.0" y="421" text-anchor="middle" font-size="11" fill="#526075">正文 / 来源 / 附件 · 同一 ID</text></g><g class="loop-node" data-node="connect" role="button" tabindex="0" aria-pressed="false" aria-label="关联（可选）"><rect x="320" y="480" width="280" height="74" rx="9"/><text x="460.0" y="509" text-anchor="middle" font-size="16" font-weight="600">关联（可选）</text><text x="460.0" y="531" text-anchor="middle" font-size="11" fill="#526075">记录链接 / 思考脉络</text></g><g class="loop-node" data-node="retrieve" role="button" tabindex="0" aria-pressed="false" aria-label="搜索与找回"><rect x="320" y="590" width="280" height="74" rx="9"/><text x="460.0" y="619" text-anchor="middle" font-size="16" font-weight="600">搜索与找回</text><text x="460.0" y="641" text-anchor="middle" font-size="11" fill="#526075">时间 / 目录 / 标签 / 脉络</text></g><g class="loop-node" data-node="use" role="button" tabindex="0" aria-pressed="false" aria-label="理解与使用"><rect x="320" y="700" width="280" height="74" rx="9"/><text x="460.0" y="729" text-anchor="middle" font-size="16" font-weight="600">理解与使用</text><text x="460.0" y="751" text-anchor="middle" font-size="11" fill="#526075">学习实践 / 判断 / 工作 / 写作</text></g><g class="loop-node" data-node="new" role="button" tabindex="0" aria-pressed="false" aria-label="新经验 / 想法 / 问题"><rect x="35" y="700" width="200" height="74" rx="9"/><text x="135.0" y="729" text-anchor="middle" font-size="14" font-weight="600">新经验 / 想法 / 问题</text><text x="135.0" y="751" text-anchor="middle" font-size="11" fill="#526075">继续记录</text></g><g class="loop-node data-node" data-node="backup" role="button" tabindex="0" aria-pressed="false" aria-label="导出与备份"><rect x="35" y="480" width="200" height="74" rx="9"/><text x="135.0" y="509" text-anchor="middle" font-size="14" font-weight="600">导出与备份</text><text x="135.0" y="531" text-anchor="middle" font-size="11" fill="#526075">Markdown / 完整备份</text></g><g class="loop-node data-node" data-node="restore" role="button" tabindex="0" aria-pressed="false" aria-label="从备份恢复"><rect x="35" y="590" width="200" height="74" rx="9"/><text x="135.0" y="619" text-anchor="middle" font-size="14" font-weight="600">从备份恢复</text><text x="135.0" y="641" text-anchor="middle" font-size="11" fill="#526075">空白工作区</text></g><g class="loop-node public-node" data-node="publish" role="button" tabindex="0" aria-pressed="false" aria-label="预览并主动发布"><rect x="700" y="370" width="260" height="74" rx="9"/><text x="830.0" y="399" text-anchor="middle" font-size="16" font-weight="600">预览并主动发布</text><text x="830.0" y="421" text-anchor="middle" font-size="11" fill="#526075">用户确认公开内容</text></g><g class="loop-node public-node" data-node="explore" role="button" tabindex="0" aria-pressed="false" aria-label="Explore 公开阅读"><rect x="700" y="480" width="260" height="74" rx="9"/><text x="830.0" y="509" text-anchor="middle" font-size="16" font-weight="600">Explore 公开阅读</text><text x="830.0" y="531" text-anchor="middle" font-size="11" fill="#526075">浏览 / 搜索 / 公开关联</text></g><g class="loop-node public-node" data-node="manage" role="button" tabindex="0" aria-pressed="false" aria-label="更新 / 撤回发布"><rect x="700" y="590" width="260" height="84" rx="9"/><text x="830.0" y="619" text-anchor="middle" font-size="16" font-weight="600">更新 / 撤回发布</text><text x="830.0" y="641" text-anchor="middle" font-size="11" fill="#526075">更新公开正文，或停止公开</text></g></svg></div><div id="node-detail" aria-live="polite"></div></section>
+<section><h2>保存</h2>
+<p>写下正文或导入资料后，直接保存。无需先选择目录、标签、学习状态或思考脉络。</p>
+<div class="scroll"><table>
+<thead><tr><th>入口</th><th>保存位置如何处理</th><th>保存后的结果</th></tr></thead>
+<tbody>
+<tr><td>首页随手记录</td><td>位置默认留空，可主动指定</td><td rowspan="3">生成一条有稳定 ID 的记录，保留正文、时间和来源。默认私有，立即出现在「全部记录」，可阅读和搜索。</td></tr>
+<tr><td>目录内新建</td><td>沿用当前空间或分类</td></tr>
+<tr><td>文件、网页、AI 对话导入</td><td>可暂不指定位置，保留导入来源和批次</td></tr>
+</tbody></table></div>
+<p>全部记录是所有内容的时间视图。未指定位置也能长期使用；「待整理」可作为筛选视图，整理按需进行。</p>
+</section>
+
+<section><h2>归类</h2>
+<p>归类用于安排内容的位置，方便按目录浏览。</p>
+<div class="grid">
+<article><h3>位置 · 一个主要归属</h3><p>界面提供一个「位置」入口，搜索或选择完整路径，例如「技术研究 / Python」。允许只选空间，也允许留空。</p><p>空间与分类由同一个选择器承接。移动位置只修改归属，原文和 ID 保留。</p></article>
+<article><h3>标签 · 多个横向标记</h3><p>例如「AI」「职业」「产品」。一条记录可以有多个标签，从不同主题筛选出同一份内容。</p><p>标签可随时补充。类型和学习状态也放在可选属性中，保存时无需逐项填写。</p></article>
+</div>
+<p class="muted">批量设置位置与标签的具体交互待设计。</p>
+</section>
+
+<section><h2>关联</h2>
+<p>关联表达记录之间的关系，以及多条记录共同涉及的问题。</p>
+<div class="scroll"><table>
+<thead><tr><th>形式</th><th>连接什么</th><th>如何建立</th></tr></thead>
+<tbody>
+<tr><td>记录链接</td><td>一条记录与另一条记录，例如函数笔记与接口故障复盘</td><td>手动引用或添加关系，支持查看反向引用</td></tr>
+<tr><td>思考脉络</td><td>围绕同一长期问题的多条记录，可跨目录和时间</td><td>用户主动创建，或 AI 提议后由用户确认。新记录先进入「可能相关」，确认后加入。</td></tr>
+<tr><td>关联图</td><td>已有主题、记录和关系</td><td>把已有连接画出来，节点打开原文，连线说明关系。图本身不创建额外副本。</td></tr>
+</tbody></table></div>
+<p>一条记录可以加入多个脉络。脉络先展示有原文依据的梳理，再提供关联图和时间线。无依据的联系保留为候选。</p>
+</section>
+
+<section><h2>找回与使用</h2>
+<div class="grid">
+<article><h3>找回知识</h3><p>按关键词搜索，或沿目录、标签、已有链接打开原文。核对背景和来源后，用于学习、项目、写作或解决问题。</p></article>
+<article><h3>回看思考</h3><p>进入思考脉络，查看不同时间的表达、相关经历和观点差异，辅助当前判断。推测与原文表达分别呈现。</p></article>
+</div>
+<p>实践后可以补充原记录，或新建一次经验、复盘、选择及结果，再关联到原记录或脉络。</p>
+</section>
+
+<section><h2>同一份内容的不同入口</h2>
+<div class="example"><p>记录「学习 AI 是为了换工作，还是为了独立做产品？」</p>
+<ul>
+<li>保存后自动出现在当天的「全部记录」。</li>
+<li>可选位置「技术研究 / AI」，从目录找到。</li>
+<li>可加标签「职业」「产品」，从标签找到。</li>
+<li>确认加入「我希望怎样发展职业？」后，从脉络找到。</li>
+</ul><p>这些入口打开同一个 ID 的原文。修改原文后，各入口引用同一份更新后的内容。</p></div>
+</section>
+
+<section><h2>AI 理解与长期记忆</h2>
+<p>AI 按内容权限参与检索、分析和关联建议。AI 对话需保留发言角色，区分用户表达、引用、AI 建议与用户明确认可。</p>
+<p>长期记忆是从记录中提取的个人上下文。默认允许 AI 对话参与理解和候选提取，候选由用户确认后生效，支持查看来源、纠正与删除。</p>
+<p>脉络梳理发现有意义的变化时生成候选新版，标明差异和证据，经用户接受后更新当前版本，并保留历史。</p>
+<p>Agent 可在授权范围内利用这些材料完成研究、整理或规划任务，重要写入与执行另行控制权限。</p>
+</section>
+
+<section><h2>发布、备份与删除</h2>
+<div class="scroll"><table><thead><tr><th>操作</th><th>结果</th></tr></thead><tbody>
+<tr><td>主动发布</td><td>预览并确认后，选定内容及附件进入 Explore。已发布内容保存后同步更新，撤回停止公开访问并保留私人原文。</td></tr>
+<tr><td>导出与备份</td><td>Markdown 用于阅读和迁移，完整备份用于恢复内容、组织结构和关系。V1.0 恢复到空白工作区。</td></tr>
+<tr><td>归档与删除</td><td>归档减少日常干扰。删除进入回收站，恢复时尽量保留原位置；位置失效时仍可从全部记录找到。永久删除需要确认。</td></tr>
+</tbody></table></div>
+</section>
+<section class="scope-panel"><h2>交付范围</h2><p>V1.0 优先保存、编辑、目录、搜索、手动关联、发布和备份。AI 发现脉络、长期记忆提取与梳理版本属于后续能力。本文说明产品逻辑，具体交付阶段以 PRD 为准。</p></section>
+</main><script>const details={"capture": ["快速记录", "写下正文即可保存，位置可以留空。"], "file": ["文件导入", "导入成功后直接保存。解析限制与失败原因在批次内查看。"], "web": ["网页保存", "保存链接和来源，可补充自己的摘要。"], "chat": ["AI 对话导入", "保留对话角色、时间和来源，AI 的回答与个人表达分别保留。"], "inbox": ["保存记录", "生成稳定 ID，立即出现在全部记录，可搜索和打开。目录内新建自动沿用当前位置；无需进入中转收集箱。"], "organize": ["归类（可选）", "点击一个位置入口选择空间和分类，可留空；标签可以添加多个。只修改归属，原文和 ID 保留。"], "content": ["编辑与保存原文", "可随时完善正文。全部记录按时间展示所有内容，目录和标签展示同一份记录的不同集合。"], "connect": ["关联（可选）", "手动链接其他原文；脉络可跨时间和目录。AI 建议先放可能相关，经确认后加入。关联图呈现已有连接。"], "retrieve": ["搜索与找回", "从任意入口打开同一份原文。未指定目录或未关联的记录仍可搜索。"], "use": ["理解与使用", "核对原文背景与来源，用于当前问题。应用后可补充原文或新建记录。"], "new": ["新经验 / 想法 / 问题", "记录实践结果与新的思考，可关联此前的内容。"], "backup": ["导出与备份", "Markdown 用于阅读迁移，完整备份用于恢复结构、正文与关系。"], "restore": ["从备份恢复", "预览并确认后恢复。V1.0 的恢复目标是空白工作区。"], "publish": ["预览并主动发布", "检查正文、附件与隐私后主动确认，才进入公开范围。"], "explore": ["Explore 公开阅读", "访客只读取已发布内容和符合公开权限的关联。"], "manage": ["更新 / 撤回发布", "已发布内容保存后同步更新；撤回停止公开访问，私人原文保留。"]};const nodes=document.querySelectorAll('[data-node]');function show(key){nodes.forEach(n=>n.setAttribute('aria-pressed',String(n.dataset.node===key)));const box=document.getElementById('node-detail');box.replaceChildren();const title=document.createElement('h3');title.textContent=details[key][0];const text=document.createElement('p');text.textContent=details[key][1];box.append(title,text);}nodes.forEach(n=>{n.addEventListener('click',()=>show(n.dataset.node));n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show(n.dataset.node);}})});show('inbox');</script></body></html>

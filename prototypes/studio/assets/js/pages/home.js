@@ -57,15 +57,15 @@
     h('div', { class: 'toolbar' }, plainTools, richTools, saveBtn));
   const composerToggle = h('button', { class: 'capture-trigger min-h-12 px-4! py-3! hover:bg-[var(--side)]!', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'home-composer-panel' }, I('plus', 18), h('span', { text: t('记录此刻', 'Capture a thought') }), h('small', { text: t('有什么想留下？', 'What would you like to remember?') }));
   const collapseBtn = h('button', { class: 'text-button', type: 'button', text: t('收起', 'Collapse'), onclick: () => setExpanded(false) });
-  const composer = h('section', { class: 'home-capture mb-8! rounded-lg!', 'aria-label': t('记录此刻', 'Capture a thought') }, composerToggle, composerPanel, collapseBtn);
-  function setExpanded(expanded) {
+  const composer = h('section', { class: 'home-capture rounded-lg!', 'aria-label': t('记录此刻', 'Capture a thought') }, composerToggle, composerPanel, collapseBtn);
+  function setExpanded(expanded, { focus = true } = {}) {
     composerPanel.hidden = !expanded; collapseBtn.hidden = !expanded; composerToggle.hidden = expanded;
     composerToggle.setAttribute('aria-expanded', String(expanded));
     if (expanded) {
-      focusBody();
+      if (focus) focusBody();
       richLoading ??= loadRichEditor();
       richLoading.then(showRichWhenReady);
-    } else composerToggle.focus();
+    } else if (focus) composerToggle.focus();
   }
   composerToggle.addEventListener('click', () => setExpanded(true));
   collapseBtn.hidden = true;
@@ -137,7 +137,7 @@
         body.hidden = plainTools.hidden = false;
       }
       U.Guard.set(false);
-      U.toast(t('已保存到收集箱', 'Saved to inbox')); L.Shell.renderSidebar(); renderLists(); setExpanded(false);
+      U.toast(t('已保存到收集箱', 'Saved to inbox')); L.Shell.renderSidebar(); renderLists(); setExpanded(true, { focus: true });
     } catch (e) { console.error(e); U.toast(t('保存失败，请重试', 'Could not save. Try again.'), 'error'); }
   }
   saveBtn.addEventListener('click', save);
@@ -163,10 +163,10 @@
   }
 
   page.appendChild(h('div', { class: 'home home-personal' },
-    h('header', { class: 'home-intro mb-6!' }, h('p', { class: 'home-date', text: U.fmtDateLong(new Date()) }),
+    h('header', { class: 'home-intro' }, h('p', { class: 'home-date', text: U.fmtDateLong(new Date()) }),
       h('h1', { text: t('此刻', 'Now') })),
     composer, recentBox));
   renderLists();
-  if (window.location.hash === '#new') setExpanded(true);
+  setExpanded(true, { focus: window.location.hash === '#new' });
   window.addEventListener('hashchange', () => { if (window.location.hash === '#new') setExpanded(true); });
 })();

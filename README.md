@@ -8,7 +8,7 @@ V1.0 先做成个人知识管理工作台。体验分为私人 Studio 与公开 
 
 ## 当前阶段
 
-仓库处于路线图中的 Phase 0：产品文档基线已经建立，Studio 有可在浏览器中打开的静态原型。前后端业务应用尚未开发，架构、设计规范和开发说明尚未编写。
+仓库处于路线图中的 Phase 0：产品文档基线已经建立，Studio 有可在浏览器中打开的静态原型。前后端业务应用尚未开发，设计总览与视觉规范已建立；架构、接口契约和开发说明尚未编写。
 
 V1.0 要打通两条闭环，验收标准见 [PRD](docs/product/PRD.md)：
 
@@ -23,6 +23,7 @@ V1.0 要打通两条闭环，验收标准见 [PRD](docs/product/PRD.md)：
 | [产品需求](docs/product/PRD.md) | V1.0 范围、流程、业务规则和验收标准 |
 | [产品路线图](docs/product/ROADMAP.md) | 从工作台到个人 AI 助手的阶段划分 |
 | [核心领域模型](docs/product/CORE-DOMAIN-MODEL.md) | 内容、空间、来源、关联和发布的逻辑模型 |
+| [Studio 设计总览](docs/design/DESIGN.md) | 页面交互、默认暖白与灰紫主题、原型边界 |
 | [文档变更记录](docs/CHANGELOG.md) | 产品文档的修订摘要 |
 | [深度调研](docs/product/deep-research-report.md) | 开源项目与采集架构的调研材料，不是技术基线 |
 
@@ -31,7 +32,7 @@ V1.0 要打通两条闭环，验收标准见 [PRD](docs/product/PRD.md)：
 ## 目录
 
 - `docs/product/`：产品战略、需求、路线图和领域模型。
-- `docs/design/`：交互、视觉设计与设计规范。目录已保留，材料尚未写入。
+- `docs/design/`：交互、视觉设计与设计规范，入口为 [设计总览](docs/design/DESIGN.md)。
 - `docs/architecture/`：系统架构、技术选型与架构决策。目录已保留，材料尚未写入。
 - `docs/development/`：开发流程、环境说明与实施计划。目录已保留，材料尚未写入。
 - `prototypes/studio/`：灵脑 Studio 静态原型。
@@ -48,6 +49,7 @@ V1.0 要打通两条闭环，验收标准见 [PRD](docs/product/PRD.md)：
 | 知识空间 | [spaces.html](prototypes/studio/spaces.html) |
 | 空间详情 | [space.html](prototypes/studio/space.html) |
 | 内容编辑 | [editor.html](prototypes/studio/editor.html) |
+| 思考脉络（手工示例，正式交付阶段待确认） | [threads.html](prototypes/studio/threads.html) |
 | 搜索 | [search.html](prototypes/studio/search.html) |
 | 导入中心 | [imports.html](prototypes/studio/imports.html) |
 | 学习中心 | [learning.html](prototypes/studio/learning.html) |
