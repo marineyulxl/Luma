@@ -266,7 +266,6 @@
     { key: 'spaces', label: t('知识空间', 'Spaces'), icon: 'layers', href: 'spaces.html' },
     { key: 'threads', label: t('思考脉络', 'Thought threads'), icon: 'link', href: 'threads.html' },
     { key: 'imports', label: t('导入中心', 'Imports'), icon: 'download', href: 'imports.html' },
-    { key: 'learning', label: t('学习中心', 'Learning'), icon: 'book', href: 'learning.html' }
   ];
   const EXPAND_KEY = 'luma-studio-proto-expanded-v1';
   const Shell = {

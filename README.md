@@ -1,59 +1,56 @@
 # 灵脑（Luma）
 
-灵脑是面向个人长期使用的数字第二大脑。它帮助个人持续收集、组织、关联和找回工作、学习、生活与思考中的知识、资料、经历和想法，并在长期演进中把知识管理、个人第二大脑与个人 AI 助手接成同一套系统。
+灵脑是个人记录与知识工作台，用于保存笔记、AI 对话、工作经验、生活经历和思考，通过目录、搜索与关联找回过去的积累。
 
-产品主张：让知识成为记忆，让记忆产生联系，让联系辅助思考。
+## 查看界面
 
-V1.0 先做成个人知识管理工作台。体验分为私人 Studio 与公开 Site：默认私有，由用户主动发布。目标平台是 Web，PC 优先，移动端保持基本可用。
+打开 [Studio 原型](prototypes/studio/index.html) 查看页面与交互。原型数据保存在浏览器中，尚未连接后端；旧收集箱、归档、保存即更新公开内容等行为仍待改版；正式规则见产品需求。
 
-## 当前阶段
+## 当前可用能力
 
-仓库处于路线图中的 Phase 0：产品文档基线已经建立，Studio 有可在浏览器中打开的静态原型。前后端业务应用尚未开发，设计总览与视觉规范已建立；架构、接口契约和开发说明尚未编写。
+项目处于基础实现阶段，尚不能作为正式笔记应用使用。
 
-V1.0 要打通两条闭环，验收标准见 [PRD](docs/product/PRD.md)：
+| 能力 | 状态 |
+| --- | --- |
+| 数据库 | 22 张业务表与迁移可用 |
+| 后端基础 | 配置、事务、健康检查和开发文档可用 |
+| 业务 API | V1.0 全部业务契约已建立，业务接口待实现 |
+| Studio | 静态交互原型，正式前端待实现 |
+| Site、AI、生产部署 | 后续阶段 |
 
-- 私人知识闭环：快速记录或外部导入，经过收集、整理、编辑、关联和搜索，再导出与备份。
-- 公开表达闭环：在 Studio 中创建并编辑，由用户主动发布到 Site，之后可以更新或撤回。
+## 快速开始
+
+准备 Python 3.12+、uv 和已启动的 PostgreSQL。以下在仓库根目录使用 PowerShell：
+
+```powershell
+cd backend
+uv sync --extra dev --extra test --locked
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+在 .env 填入数据库凭据，确保 luma_dev 已存在，再执行：
+
+```powershell
+$env:APP_ENV = 'development'
+uv run --locked alembic upgrade head
+uv run --locked uvicorn app.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+```
+
+打开 http://127.0.0.1:8000/docs 查看已实现的健康检查。首次建库、测试及问题排查见 [开发指南](docs/development/DEVELOPMENT.md)。
 
 ## 文档
 
-| 文档 | 说明 |
-|---|---|
-| [产品战略](docs/product/PRODUCT-STRATEGY.md) | 长期方向、定位、用户和产品承诺 |
-| [产品需求](docs/product/PRD.md) | V1.0 范围、流程、业务规则和验收标准 |
-| [产品路线图](docs/product/ROADMAP.md) | 从工作台到个人 AI 助手的阶段划分 |
-| [核心领域模型](docs/product/CORE-DOMAIN-MODEL.md) | 内容、空间、来源、关联和发布的逻辑模型 |
-| [Studio 设计总览](docs/design/DESIGN.md) | 页面交互、默认暖白与灰紫主题、原型边界 |
-| [文档变更记录](docs/CHANGELOG.md) | 产品文档的修订摘要 |
-| [深度调研](docs/product/deep-research-report.md) | 开源项目与采集架构的调研材料，不是技术基线 |
+| 你想做什么 | 阅读入口 |
+| --- | --- |
+| 启动、测试或修改后端 | [开发指南](docs/development/DEVELOPMENT.md) |
+| 理解模块和数据流 | [系统设计](docs/architecture/ARCHITECTURE.md) |
+| 核对功能范围和验收结果 | [产品需求](docs/product/PRD.md) |
+| 查表、字段和约束 | [数据库设计](docs/architecture/DATABASE-DESIGN.md) |
+| 查请求、响应和错误规则 | [API 契约](docs/architecture/API.md) |
+| 设计或实现页面 | [设计规范](docs/design/DESIGN.md) |
 
-已确认的十项产品决策写在 [PRD 第 2.2 节](docs/product/PRD.md)。技术选型、数据表和 API 契约待架构文档确认，不在本页展开。
+[项目 Q&A](docs/QA.md) 记录关键困难和取舍，[变更记录](docs/CHANGELOG.md) 记录文档修订。旧方案保留在各主题 archive 目录，不作为现行规格。
 
-## 目录
+## 下一步
 
-- `docs/product/`：产品战略、需求、路线图和领域模型。
-- `docs/design/`：交互、视觉设计与设计规范，入口为 [设计总览](docs/design/DESIGN.md)。
-- `docs/architecture/`：系统架构、技术选型与架构决策。目录已保留，材料尚未写入。
-- `docs/development/`：开发流程、环境说明与实施计划。目录已保留，材料尚未写入。
-- `prototypes/studio/`：灵脑 Studio 静态原型。
-
-## Studio 原型
-
-用浏览器直接打开 [prototypes/studio/index.html](prototypes/studio/index.html)。原型只演示界面和页面流转，不连接后端。
-
-| 页面 | 文件 |
-|---|---|
-| 登录 | [login.html](prototypes/studio/login.html) |
-| 控制台 | [index.html](prototypes/studio/index.html) |
-| 收集箱 | [inbox.html](prototypes/studio/inbox.html) |
-| 知识空间 | [spaces.html](prototypes/studio/spaces.html) |
-| 空间详情 | [space.html](prototypes/studio/space.html) |
-| 内容编辑 | [editor.html](prototypes/studio/editor.html) |
-| 思考脉络（手工示例，正式交付阶段待确认） | [threads.html](prototypes/studio/threads.html) |
-| 搜索 | [search.html](prototypes/studio/search.html) |
-| 导入中心 | [imports.html](prototypes/studio/imports.html) |
-| 学习中心 | [learning.html](prototypes/studio/learning.html) |
-| 数据管理 | [data.html](prototypes/studio/data.html) |
-| 回收站 | [trash.html](prototypes/studio/trash.html) |
-| 外观设置 | [appearance.html](prototypes/studio/appearance.html) |
-| 账户设置 | [settings.html](prototypes/studio/settings.html) |
+确定会话与正文校验边界，按记录契约实现新建、保存、详情和列表，接上 Studio 验证可用链路。V1.0 保留人工思考主题、记录成员和时间线，并覆盖中英文及移动端核心操作。第一阶段不接 AI。

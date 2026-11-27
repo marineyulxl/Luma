@@ -1,0 +1,33 @@
+[project]
+name = "luma-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "SQLAlchemy>=2.0,<2.1",
+  "psycopg[binary]>=3.2,<4",
+  "alembic>=1.16,<2",
+  "pydantic-settings>=2.7,<3",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "httpx>=0.28,<1", "openapi-spec-validator>=0.7,<1"]
+dev = ["ruff>=0.14,<1", "mypy>=1.18,<2"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+python_version = "3.12"
+files = ["app", "migrations/env.py", "scripts"]
+strict = true

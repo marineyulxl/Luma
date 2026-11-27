@@ -1,6 +1,6 @@
 /* 内容编辑与详情（PRD 7.4 / 7.10 / 7.11 / 7.12）
    - 自动保存 + 手动保存，只有“服务端”成功后才显示已保存；失败保留本地修改
-   - 属性：类型、空间、分类、标签、学习状态、整理状态
+   - 属性：类型、空间、分类、标签、整理状态
    - 来源、关联、反向引用（含 [[ 选择器）
    - 发布 / 撤回（含公开预览与隐私提醒） */
 (function () {
@@ -295,7 +295,6 @@
       (val) => { change({ spaceId: val, categoryId: '' }); renderProps(); })));
     propsEl.appendChild(h('label', { class: 'field-label' }, '分类', sel(categoryOptions(v.spaceId), v.categoryId, '分类', (val) => change({ categoryId: val }))));
     propsEl.appendChild(tagsGroup(v));
-    propsEl.appendChild(h('label', { class: 'field-label' }, '学习状态（手动维护）', sel([{ value: '', label: '不设置' }].concat(S.LEARNING_STATES.map((t) => ({ value: t, label: t }))), v.learning, '学习状态', (val) => change({ learning: val }))));
     propsEl.appendChild(organizeGroup(c));
     relationsGroups().forEach((g) => propsEl.appendChild(g));
     propsEl.appendChild(publishGroup(c));

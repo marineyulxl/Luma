@@ -2,7 +2,7 @@
    - 仅使用浏览器 localStorage 模拟后端，没有真实服务端、鉴权或同步。
    - 数据对象与 PRD / CORE-DOMAIN-MODEL 的产品职责对齐：
      Content、Space、Category、Tag、ContentRelation、ContentSource、Attachment、ImportJob、Publication。
-   - 整理状态（organize）、发布状态（publish.status）、学习状态（learning）相互独立。 */
+   - 整理状态（organize）、发布状态（publish.status）相互独立。 */
 (function (global) {
   'use strict';
   const L = (global.Luma = global.Luma || {});
@@ -15,7 +15,6 @@
   const FORMAT_VERSION = 1;
 
   const CONTENT_TYPES = ['知识', '经历', '记忆记录', '想法']; // Knowledge / Experience / Memory / Thought
-  const LEARNING_STATES = ['待学习', '学习中', '已理解', '能应用'];
   const ORGANIZE_LABEL = { inbox: '待整理', organized: '已整理', archived: '已归档' };
   const PUBLISH_LABEL = { draft: '私有草稿', published: '已发布', withdrawn: '已撤回' };
   const RELATION_TYPES = { related: '相关', prerequisite: '前置知识', application: '实际应用', contrast: '对比' };
@@ -417,7 +416,6 @@
   }
 
   /* ---------- 学习 ---------- */
-  function setLearning(id, value) { return updateContent(id, { learning: value || '' }); }
 
   /* ---------- 搜索 ---------- */
   const RANGE_MS = { today: 24 * 3600e3, week: 7 * 24 * 3600e3, month: 30 * 24 * 3600e3 };
@@ -494,7 +492,7 @@
   function loadDemoData() { state = buildSeed(); persist(); }
 
   L.Store = {
-    CONTENT_TYPES, LEARNING_STATES, ORGANIZE_LABEL, PUBLISH_LABEL, RELATION_TYPES, ACCENTS, BASES, MIN_PASSWORD_LENGTH, debug,
+    CONTENT_TYPES, ORGANIZE_LABEL, PUBLISH_LABEL, RELATION_TYPES, ACCENTS, BASES, MIN_PASSWORD_LENGTH, debug,
     uid, nowIso,
     activeContents, trashedContents, getContent, getSpace, getCategory, getTag, listSpaces, childCategories, descendantCategoryIds,
     categoryPath, categoryDepth, contentsInSpace, contentsInCategory, sortByUpdated, allTags: () => state.tags.slice(), allCategories: () => state.categories.slice(),
@@ -504,7 +502,7 @@
     addCategory, renameCategory, canMoveCategory, moveCategory, deleteCategory,
     ensureTag, tagUsage,
     addRelation, removeRelation, relationsFor, findByTitle,
-    organize, publishIssues, publish, withdraw, publicRelations, setLearning,
+    organize, publishIssues, publish, withdraw, publicRelations,
     search, addImportJob, updateImportJob, findDuplicate,
     isBlankWorkspace, buildBackup, validateBackup, restoreBackup, resetWorkspace, loadDemoData, counts: () => counts(state),
     state: () => state

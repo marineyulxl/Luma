@@ -32,3 +32,7 @@
 领域关系见 [核心领域模型](../product/CORE-DOMAIN-MODEL.md)。
 
 表结构设计见 [首阶段数据库设计](DATABASE-DESIGN.md)。
+
+## 采集边界
+
+采用 [统一采集架构](INGESTION-DESIGN.md)，来源、原始资料、处理版本、规范结果和可编辑记录分别管理。数据库旧导入模型按该方案修订后再建表。
