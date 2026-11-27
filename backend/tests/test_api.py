@@ -23,7 +23,14 @@ def test_health_and_engine_lifecycle():
         assert client.get("/health/live").json() == {"status": "ok"}
         assert client.get("/health/ready").status_code == 200
         spec = client.get("/openapi.json").json()
-        assert set(spec["paths"]) == {"/health/live", "/health/ready"}
+        assert set(spec["paths"]) == {
+            "/health/live",
+            "/health/ready",
+            "/api/account",
+            "/api/auth/sessions",
+            "/api/auth/sessions/refresh",
+            "/api/auth/sessions/current",
+        }
         assert client.get("/api/contents").status_code == 404
     assert disposed == [True]
 
@@ -42,6 +49,7 @@ def test_database_error_response_hides_details():
 
 def test_production_hides_docs_without_contacting_database():
     settings = Settings(
+        AUTH_SIGNING_KEY="test-key-for-automated-tests-only-123456",
         APP_ENV="production",
         DB_HOST="127.0.0.1",
         DB_PORT=5432,

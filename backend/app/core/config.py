@@ -1,8 +1,10 @@
 """环境选择由进程 APP_ENV 决定，生产环境不读取本地 dotenv。"""
 
 import os
+import secrets
 from pathlib import Path
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +29,22 @@ class Settings(BaseSettings):
     user: str = Field(min_length=1, validation_alias="DB_USER")
     password: SecretStr = Field(validation_alias="DB_PASSWORD", repr=False)
     cors_origins: list[str] = Field(default_factory=list, validation_alias="CORS_ORIGINS")
+    auth_signing_key: SecretStr = Field(
+        default_factory=lambda: SecretStr(secrets.token_urlsafe(48)),
+        validation_alias="AUTH_SIGNING_KEY",
+        repr=False,
+    )
+    auth_issuer: str = Field(default="luma", min_length=1, validation_alias="AUTH_ISSUER")
+    auth_audience: str = Field(
+        default="luma-studio", min_length=1, validation_alias="AUTH_AUDIENCE"
+    )
+    access_token_seconds: int = Field(
+        default=900, ge=1, le=3600, validation_alias="ACCESS_TOKEN_SECONDS"
+    )
+    refresh_idle_seconds: int = Field(
+        default=604800, ge=60, validation_alias="REFRESH_IDLE_SECONDS"
+    )
+    session_max_seconds: int = Field(default=2592000, ge=60, validation_alias="SESSION_MAX_SECONDS")
 
     @model_validator(mode="after")
     def validate_environment(self) -> Self:
@@ -36,7 +54,25 @@ class Settings(BaseSettings):
             raise ValueError("DB_HOST 和 DB_NAME 不能为空")
         if "*" in self.cors_origins:
             raise ValueError("CORS_ORIGINS 必须为明确的来源列表")
+        for origin in self.cors_origins:
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+                or parsed.username
+                or any(char.isspace() for char in origin)
+            ):
+                raise ValueError("CORS_ORIGINS 必须为不含路径或凭据的 HTTP 来源")
+        if len(self.auth_signing_key.get_secret_value().encode("utf-8")) < 32:
+            raise ValueError("AUTH_SIGNING_KEY 至少需要 32 字节")
+        if self.refresh_idle_seconds > self.session_max_seconds:
+            raise ValueError("刷新空闲期不能超过会话绝对期限")
         if self.app_env == "production":
+            if "auth_signing_key" not in self.model_fields_set:
+                raise ValueError("production 必须显式设置 AUTH_SIGNING_KEY")
             required = {"host", "port", "name", "user", "password"}
             if not required.issubset(self.model_fields_set):
                 raise ValueError("production 必须显式设置全部 DB_* 配置")

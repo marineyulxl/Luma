@@ -18,6 +18,12 @@ def clean_environment(monkeypatch):
         "DB_USER",
         "DB_PASSWORD",
         "CORS_ORIGINS",
+        "AUTH_SIGNING_KEY",
+        "AUTH_ISSUER",
+        "AUTH_AUDIENCE",
+        "ACCESS_TOKEN_SECONDS",
+        "REFRESH_IDLE_SECONDS",
+        "SESSION_MAX_SECONDS",
     ):
         monkeypatch.delenv(key, raising=False)
     return monkeypatch
@@ -58,7 +64,12 @@ def test_production_never_loads_dotenv(tmp_path: Path, clean_environment):
 
 def test_production_requires_explicit_database():
     with pytest.raises(ValidationError):
-        Settings(APP_ENV="production", DB_USER="luma_app", DB_PASSWORD="a-long-test-secret")
+        Settings(
+            AUTH_SIGNING_KEY="test-key-for-automated-tests-only-123456",
+            APP_ENV="production",
+            DB_USER="luma_app",
+            DB_PASSWORD="a-long-test-secret",
+        )
 
 
 @pytest.mark.parametrize(
@@ -66,6 +77,7 @@ def test_production_requires_explicit_database():
 )
 def test_production_rejects_development_credentials(overrides):
     values = dict(
+        AUTH_SIGNING_KEY="test-key-for-automated-tests-only-123456",
         APP_ENV="production",
         DB_HOST="db",
         DB_PORT=5432,
@@ -80,6 +92,7 @@ def test_production_rejects_development_credentials(overrides):
 
 def test_production_accepts_explicit_configuration():
     settings = Settings(
+        AUTH_SIGNING_KEY="test-key-for-automated-tests-only-123456",
         APP_ENV="production",
         DB_HOST="db",
         DB_PORT=5432,
@@ -102,3 +115,36 @@ def test_env_file_cannot_switch_selected_environment(tmp_path: Path, clean_envir
     )
     with pytest.raises(ConfigurationError):
         Settings.load(tmp_path)
+
+
+def test_production_requires_persistent_signing_key():
+    with pytest.raises(ValidationError):
+        Settings(
+            APP_ENV="production",
+            DB_HOST="db",
+            DB_PORT=5432,
+            DB_NAME="luma",
+            DB_USER="luma_app",
+            DB_PASSWORD="long-test-password",
+        )
+
+
+@pytest.mark.parametrize(
+    "origin", ["null", "*", "https://example.com/path", "https://user@example.com"]
+)
+def test_cors_rejects_non_origins(origin):
+    with pytest.raises(ValidationError):
+        Settings(DB_USER="test", DB_PASSWORD="test", CORS_ORIGINS=[origin])
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"AUTH_SIGNING_KEY": "short"},
+        {"ACCESS_TOKEN_SECONDS": 0},
+        {"REFRESH_IDLE_SECONDS": 120, "SESSION_MAX_SECONDS": 60},
+    ],
+)
+def test_invalid_auth_configuration(values):
+    with pytest.raises(ValidationError):
+        Settings(DB_USER="test", DB_PASSWORD="test", **values)

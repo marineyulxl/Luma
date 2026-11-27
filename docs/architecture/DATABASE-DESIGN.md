@@ -1,10 +1,10 @@
 # 首阶段数据库设计
 
-更新于 2026-11-27。依据 [PRD 的记录与组织规则](../product/PRD.md#记录与组织)。22 张业务表已通过 SQLAlchemy 模型与 Alembic 迁移在本地 PostgreSQL 16.14 的 luma_dev 中建立。
+更新于 2026-11-27。依据 [PRD 的记录与组织规则](../product/PRD.md#记录与组织)。23 张业务表已通过 SQLAlchemy 模型与 Alembic 迁移在本地 PostgreSQL 16.14 的 luma_dev 中建立。
 
 > 本文按 [系统架构](ARCHITECTURE.md) 的统一采集模型维护。模型实现见 backend/app/modules/*/models.py，由 backend/app/db/models.py 统一注册；迁移见 backend/migrations/versions/；运行命令见 [开发指南](../development/DEVELOPMENT.md)。表结构通过验证不代表业务 API、导入执行器和搜索功能已经实现。
 
-> 第 1–19 节记录当前已建结构，第 20 节定义下一次认证迁移的目标结构。当前仍为 22 张业务表，认证目标结构尚未迁移。
+> 第 1–19 节记录现有结构与业务约束，第 20 节说明双令牌认证结构及迁移。当前为 23 张业务表，认证迁移已应用。
 
 > 产品已取消学习状态和学习中心。现有 `learning_state` 字段暂保留，后续迁移统一清理。
 
@@ -14,7 +14,7 @@
 
 采用 PostgreSQL、SQLAlchemy 2.x、psycopg 3、Alembic。首阶段单所有者，保留 owner_id。正文使用 Tiptap JSON，Markdown 导入导出。取消收集箱，不接 AI。编辑历史恢复待定。
 
-首批闭环覆盖登录、创建、保存、列表、编辑、目录标签、搜索、回收站。来源、原件与处理版本纳入采集基础，适配器按 Markdown、附件、URL、ChatGPT、DOCX/PDF 顺序实现。V1.0 Release 需增加人工脉络主题与成员关系的物理设计和迁移，当前 22 张表尚未覆盖该能力。Site 发布版本、自动建议、Memory 和 Agent 按对应阶段设计。
+首批闭环覆盖登录、创建、保存、列表、编辑、目录标签、搜索、回收站。来源、原件与处理版本纳入采集基础，适配器按 Markdown、附件、URL、ChatGPT、DOCX/PDF 顺序实现。V1.0 Release 需增加人工脉络主题与成员关系的物理设计和迁移，当前 23 张表尚未覆盖该能力。Site 发布版本、自动建议、Memory 和 Agent 按对应阶段设计。
 
 ## 2. 关系
 
@@ -28,6 +28,8 @@ erDiagram
     NORMALIZED_DOCUMENTS o|--o{ CONTENT_SOURCES : derived
     CONTENTS ||--o{ INDEX_JOBS : indexes
     USERS ||--o{ SESSIONS : owns
+    SESSIONS ||--o{ REFRESH_TOKENS : rotates
+    REFRESH_TOKENS o|--o| REFRESH_TOKENS : predecessor
     USERS ||--o{ CONTENTS : owns
     SPACES ||--o{ CATEGORIES : contains
     SPACES o|--o{ CONTENTS : holds
@@ -62,7 +64,8 @@ erDiagram
 | 表 | 核心字段及类型 | 约束与职责 |
 | --- | --- | --- |
 | users（用户表） | id uuid PK、username text、password_hash text、display_name text、disabled_at timestamptz 可空 | lower(username) 唯一，密码仅保存安全哈希。单所有者由初始化流程控制，未来账号扩展不修改内容归属模型。 |
-| sessions（登录会话表） | id uuid PK、owner_id uuid、token_hash text、expires_at timestamptz、revoked_at timestamptz 可空 | token_hash 唯一；随机会话令牌只保存哈希。登录有效性与过期策略由认证设计确定。 |
+| sessions（登录会话表） | id uuid PK、owner_id uuid、expires_at timestamptz、idle_expires_at timestamptz、last_refreshed_at timestamptz、revoked_at timestamptz 可空、revoked_reason text 可空 | 管理绝对与空闲到期、最近刷新和会话撤销；UNIQUE(owner_id,id)，时间与撤销状态有 CHECK。 |
+| refresh_tokens（刷新令牌表） | id uuid PK、owner_id uuid、session_id uuid、parent_id uuid 可空、token_hash text、created_at timestamptz、expires_at timestamptz、consumed_at timestamptz 可空 | 摘要全局唯一，复合外键约束同用户同会话的轮换链，每个会话最多一个未使用令牌。 |
 | spaces（知识空间表） | id uuid PK、owner_id uuid、name text、name_key text、description text 默认空、sort_order integer 默认 0 | UNIQUE(owner_id,name_key)。 |
 | categories（目录分类表） | id uuid PK、owner_id uuid、space_id uuid、parent_id uuid 可空、name text、name_key text、sort_order integer 默认 0 | 父分类必须同所有者同空间，使用复合外键。根分类与同父分类分别建立唯一索引。禁止自引用，移动事务检查循环。 |
 | contents（记录主表） | id uuid PK、owner_id uuid、create_request_id uuid、create_request_hash text、title text 默认空、content_type text 可空、space_id uuid 可空、category_id uuid 可空、learning_state text 可空、lifecycle_status text 默认 active、version bigint 默认 1、deleted_at timestamptz 可空 | lifecycle_status 仅 active/archived，version 大于 0；内容类型使用稳定代码校验；learning_state 为已取消能力的遗留字段。category_id 有值时 space_id 必填，且复合外键保证分类属于该空间。 |
@@ -100,7 +103,8 @@ erDiagram
 | 来源与附件 | content_sources(owner_id,content_id)，content_attachments(owner_id,attachment_id) |
 | 导入处理 | ingestion_runs(status,lease_until)，import_items(owner_id,job_id)，content_sources(owner_id,source_version_id) |
 | 会话消息 | UNIQUE(conversation_id,sequence) 支持有序读取，额外检查复合外键索引前缀覆盖 |
-| 会话失效 | UNIQUE(owner_id,id) 覆盖所有者前缀；expires_at 清理索引为候选，尚未建立 |
+| 会话失效 | 已有 sessions(expires_at) 和 sessions(idle_expires_at) WHERE revoked_at IS NULL，owner_id 前缀由复合唯一约束覆盖 |
+| 刷新轮换 | token_hash 唯一索引定位令牌，session_id 查询及初始、未使用令牌部分唯一索引见第 20 节 |
 
 逐项检查外键的引用侧索引，复合索引已覆盖时避免重复创建。JSONB 正文首阶段不默认建立整列 GIN 索引。用代表性数据的 EXPLAIN ANALYZE 验证列表与搜索，测试数据与目标响应指标待接口设计给出。
 
@@ -129,7 +133,7 @@ erDiagram
 
 业务查询显式限制 owner_id；写入通过复合外键再次防错。数据库应用账号仅具有业务读写权限，迁移账号管理 DDL，数据库不直接暴露公网。首阶段是否增加 RLS 待评审，不依赖未实现策略保护数据。
 
-密码使用成熟哈希库，会话令牌和连接密码不写日志。连接池容量按 API 实例数乘每实例上限统一计算，保留迁移与运维余量，具体值由部署资源确定。阻塞驱动不得直接放入异步事件循环执行，当前使用同步 Session，应用生命周期与请求依赖已实现；业务用例的事务仍需在对应服务中落实。
+密码使用 pwdlib 的 Argon2id 哈希实现，会话令牌和连接密码不写日志。所有者初始化在事务内锁定 users 表、检查无用户后插入，防止并发创建多个所有者；命令及输入规则见开发指南。连接池容量按 API 实例数乘每实例上限统一计算，保留迁移与运维余量，具体值由部署资源确定。阻塞驱动不得直接放入异步事件循环执行，当前使用同步 Session，应用生命周期与请求依赖已实现；业务用例的事务仍需在对应服务中落实。
 
 ## 10. 迁移、备份与验证
 
@@ -148,11 +152,11 @@ erDiagram
 - 正文、标签任一步失败都回滚；软删除记录不泄漏，恢复与永久删除符合规则。
 - 中文短词、长文本、排序分页和回收站过滤有代表性数据验证。
 
-双令牌认证目标结构、轮换事务和迁移规则见第 20 节。当前 sessions 字段字典与已建模型保持一致。
+双令牌认证结构、轮换事务和迁移规则见第 20 节。当前 sessions 字段字典与已建模型保持一致。
 
 ## 11. 待评审决定
 
-UUID、会话表、名称唯一性、复合外键、检查约束与索引已落实到迁移。迁移使用同步 psycopg 3；请求 Session 生命周期已实现；密码与认证会话策略、附件存储、数据库备份目标、中文搜索性能指标仍需确定。编辑历史仍待定；人工脉络纳入 V1.0 Release，其表结构尚待设计。Site 发布版本和 AI 对象在对应阶段设计。
+UUID、会话表、名称唯一性、复合外键、检查约束与索引已落实到迁移。迁移使用同步 psycopg 3；请求 Session 生命周期已实现；附件存储、数据库备份目标、中文搜索性能指标仍需确定。编辑历史仍待定；人工脉络纳入 V1.0 Release，其表结构尚待设计。Site 发布版本和 AI 对象在对应阶段设计。
 
 ## 参考
 
@@ -169,6 +173,8 @@ UUID、会话表、名称唯一性、复合外键、检查约束与索引已落�
 erDiagram
     users ||--o{ contents : owns
     users ||--o{ sessions : authenticates
+    sessions ||--o{ refresh_tokens : rotates
+    refresh_tokens o|--o| refresh_tokens : predecessor
     spaces ||--o{ categories : contains
     categories o|--o{ categories : parent
     spaces o|--o{ contents : location
@@ -182,7 +188,8 @@ erDiagram
     contents ||--o{ content_attachments : includes
     attachments ||--o{ content_attachments : attached
     users { uuid id PK string username string password_hash }
-    sessions { uuid id PK uuid owner_id FK string token_hash timestamptz expires_at }
+    sessions { uuid id PK uuid owner_id FK timestamptz expires_at timestamptz idle_expires_at timestamptz revoked_at }
+    refresh_tokens { uuid id PK uuid session_id FK uuid parent_id FK text token_hash timestamptz consumed_at }
     spaces { uuid id PK uuid owner_id FK string name_key }
     categories { uuid id PK uuid owner_id FK uuid space_id FK uuid parent_id FK string name_key }
     contents { uuid id PK uuid owner_id FK uuid space_id FK uuid category_id FK string title string lifecycle_status bigint version timestamptz deleted_at }
@@ -218,7 +225,7 @@ erDiagram
 
 以下为字段定义。必填字段不可为 NULL；未注明默认值表示插入时必须提供。所有带 id 的表使用 uuid 主键，服务端生成，无数据库隐式默认。业务表 owner_id 必填，连接表也执行所有者校验。users 无 owner_id。
 
-除 content_bodies、content_tags、content_attachments 外，所有表包含 created_at 和 updated_at，类型 timestamptz、必填、默认 CURRENT_TIMESTAMP。content_bodies 仅含 updated_at，content_tags 仅含 created_at，默认同上；content_attachments 无时间字段。updated_at 后续修改由业务事务维护。
+本节除 content_bodies、content_tags、content_attachments、refresh_tokens 外的表包含 created_at 和 updated_at，类型 timestamptz、必填、默认 CURRENT_TIMESTAMP。content_bodies 仅含 updated_at，content_tags 仅含 created_at，默认同上；content_attachments 无时间字段。refresh_tokens 显式列出 created_at 和 consumed_at，不含 updated_at。第 19 节六张采集追加表仅含 created_at。更新时间由业务事务维护。
 
 ### users｜用户表
 
@@ -236,9 +243,26 @@ erDiagram
 | --- | --- | --- | --- | --- |
 | id | uuid PK | 否 | 服务端生成 | 会话ID |
 | owner_id | uuid FK | 否 | 无 | 所有者ID |
-| token_hash | text | 否 | 无 | 会话令牌哈希 |
-| expires_at | timestamptz | 否 | 无 | 过期时间 |
+| created_at | timestamptz | 否 | CURRENT_TIMESTAMP | 登录时间 |
+| updated_at | timestamptz | 否 | CURRENT_TIMESTAMP | 更新时间 |
+| expires_at | timestamptz | 否 | 无 | 绝对到期时间 |
+| idle_expires_at | timestamptz | 否 | 无 | 刷新空闲到期时间 |
+| last_refreshed_at | timestamptz | 否 | 无 | 最近刷新时间 |
 | revoked_at | timestamptz | 是 | 无 | 撤销时间 |
+| revoked_reason | text | 是 | 无 | 撤销原因 |
+
+### refresh_tokens｜刷新令牌表
+
+| 字段 | 类型 | 可空 | 默认值 | 备注 |
+| --- | --- | --- | --- | --- |
+| id | uuid PK | 否 | 服务端生成 | 刷新令牌ID |
+| owner_id | uuid | 否 | 无 | 所有者ID |
+| session_id | uuid | 否 | 无 | 会话ID |
+| parent_id | uuid | 是 | 无 | 前一令牌ID |
+| token_hash | text | 否 | 无 | 令牌哈希 |
+| created_at | timestamptz | 否 | CURRENT_TIMESTAMP | 签发时间 |
+| expires_at | timestamptz | 否 | 无 | 令牌到期时间 |
+| consumed_at | timestamptz | 是 | 无 | 使用时间 |
 
 ### spaces｜知识空间表
 
@@ -467,11 +491,11 @@ stateDiagram-v2
 
 ## 16. 接口与事务设计基线
 
-V1.0 业务接口已统一定义在 [API 契约](API.md)，请求、响应与权限以该规格为准；下表保留已有数据库的事务职责。业务路由尚未实现，契约中的预览、备份恢复、主题与发布资源还需在对应阶段落实持久化设计。
+V1.0 业务接口已统一定义在 [API 契约](API.md)，请求、响应与权限以该规格为准；下表保留已有数据库的事务职责。除四个认证接口外，其余业务路由尚未实现，契约中的预览、备份恢复、主题与发布资源还需在对应阶段落实持久化设计。
 
 | 操作 | 接口草案 | 单次事务与冲突处理 |
 | --- | --- | --- |
-| 登录 | POST /api/auth/sessions | 验证密码后写入会话哈希；限流参数待定 |
+| 登录 | POST /api/auth/sessions | 事务外验证密码，事务内创建会话与刷新令牌摘要；登录限流见 API 账户规则 |
 | 新建 | POST /api/contents | 写 Content、Body、来源和明确选定的标签；客户端提供 UUID request_id；以 UNIQUE(owner_id,create_request_id) 去重，首次生成服务端记录 ID，重复请求对照 create_request_hash 返回同一结果，载荷不同返回 409 |
 | 查看列表/原文 | GET /api/contents、GET /api/contents/{id} | 所有者与删除过滤，列表只取摘要元数据，详情返回 version |
 | 保存 | PATCH /api/contents/{id} | expected_version 条件更新，正文、投影、归属、标签同事务，返回新 version |
@@ -486,7 +510,7 @@ V1.0 业务接口已统一定义在 [API 契约](API.md)，请求、响应与权
 
 字段、约束、默认值与备注已落实到模型和迁移。修改结构时同步核对第 13、14、19 节、模型及迁移；不能只改文档或以设计审查代替运行验证。
 
-数据库实际约束、删除级联和版本条件更新已通过集成测试；Mermaid 渲染、真实多连接并发、中文搜索和备份恢复仍待验证。迁移使用 PostgreSQL 16.14 与同步 psycopg 3；请求 Session 生命周期已实现；认证会话与业务服务尚未实现。
+数据库实际约束、删除级联和版本条件更新已通过集成测试；Mermaid 渲染、真实多连接并发、中文搜索和备份恢复仍待验证。迁移使用 PostgreSQL 16.14 与同步 psycopg 3；请求 Session 生命周期已实现；登录、刷新和退出服务已实现，其余业务服务待实现。
 
 ## 18. 实现约束与后续范围
 
@@ -499,13 +523,13 @@ V1.0 业务接口已统一定义在 [API 契约](API.md)，请求、响应与权
 | 上传 pending 阶段无法提供完整哈希 | sha256 允许为空，ready 状态必须非空，CHECK(status <> 'ready' OR sha256 IS NOT NULL)。 |
 | 租约超时的旧处理进程可能提交 | ingestion_runs 增加 lease_token，领取时生成新值；完成写入必须核对状态、token 与有效期。失效处理进程不得提交。 |
 | PostgreSQL 时间描述不精确 | timestamptz 表达时刻，连接时区统一 UTC，界面负责显示时区。 |
-| 首批表范围不明确 | 22 张表均已建成；下表区分职责，不表示业务功能已经交付。 |
+| 首批表范围不明确 | 23 张表均已建成；下表区分职责，不表示业务功能已经交付。 |
 
 ### 已建表的功能分组
 
 | 组 | 表 | 交付 |
 | --- | --- | --- |
-| A 基础记录 | users、sessions、spaces、categories、contents、content_bodies、tags、content_tags、content_sources | 登录、保存、目录标签、搜索、回收站 |
+| A 基础记录 | users、sessions、refresh_tokens、spaces、categories、contents、content_bodies、tags、content_tags、content_sources | 登录、保存、目录标签、搜索、回收站 |
 | B 人工关系 | content_relations | 原文链接和基础关系 |
 | C 导入与文件 | attachments、content_attachments、import_jobs、import_items、conversations、conversation_messages | 文件导入、AI 对话原文和附件 |
 
@@ -663,7 +687,7 @@ ingestion_runs 作为处理租约权威。import_items 的旧 lease_token/lease_
 
 ### 核验状态
 
-本地环境：PostgreSQL 16.14，SQLAlchemy 2.x，psycopg 3 同步连接。luma_dev 当前迁移版本为 782568a18b39（初始表结构 5f5c23f07202，随后补充任务查询索引）。
+本地环境：PostgreSQL 16.14，SQLAlchemy 2.x，psycopg 3 同步连接。luma_dev 当前迁移版本为 9c3d8a1f6b20（初始结构 5f5c23f07202，任务索引 782568a18b39，随后增加刷新令牌认证结构）。
 
 - 13 项数据库结构集成测试通过：表及字段备注、所有者与空间边界、创建幂等、正文格式、版本条件更新、软删除还原与物理删除级联、关系去重、索引任务租约和幂等、事务回滚、采集来源链一致性。
 - 空开发库已完成 downgrade base → upgrade head；alembic check 无差异。测试事务全部回滚，不保留业务数据。
@@ -674,7 +698,7 @@ ingestion_runs 作为处理租约权威。import_items 的旧 lease_token/lease_
 
 ## 20. 双令牌认证设计
 
-本节定义下一次认证迁移的目标结构。迁移将调整 sessions 并新增 refresh_tokens，完成后业务表数量为 23。第 13 节仍记录当前已建字段，迁移实施时统一更新现有字典、模型、ER 图和核验结果。
+认证结构已通过 9c3d8a1f6b20 迁移应用到 luma_dev，共 23 张业务表。字段以第 13 节为准，本节维护约束、索引、事务和迁移语义。JWT 签发、刷新轮换、当前用户与退出撤销服务已实现。
 
 ### 20.1 会话与刷新令牌的关系
 
@@ -683,7 +707,7 @@ ingestion_runs 作为处理租约权威。import_items 的旧 lease_token/lease_
 ```mermaid
 erDiagram
     users ||--o{ sessions : owns
-    sessions ||--|{ refresh_tokens : rotates
+    sessions ||--o{ refresh_tokens : rotates
     refresh_tokens o|--o| refresh_tokens : predecessor
     users { uuid id PK }
     sessions { uuid id PK uuid owner_id FK timestamptz expires_at timestamptz idle_expires_at timestamptz revoked_at }
@@ -694,36 +718,17 @@ Access Token 由服务端签名，数据库不保存 JWT 原文。刷新令牌�
 
 ### 20.2 sessions｜登录会话表
 
-| 字段 | 类型 | 可空 | 默认值 | 备注 |
-| --- | --- | --- | --- | --- |
-| id | uuid PK | 否 | 服务端生成 | 会话ID |
-| owner_id | uuid FK | 否 | 无 | 所有者ID |
-| created_at | timestamptz | 否 | CURRENT_TIMESTAMP | 登录时间 |
-| updated_at | timestamptz | 否 | CURRENT_TIMESTAMP | 更新时间 |
-| expires_at | timestamptz | 否 | 无 | 绝对到期时间 |
-| idle_expires_at | timestamptz | 否 | 无 | 刷新空闲到期时间 |
-| last_refreshed_at | timestamptz | 否 | 无 | 最近刷新时间 |
-| revoked_at | timestamptz | 是 | 无 | 撤销时间 |
-| revoked_reason | text | 是 | 无 | 撤销原因 |
+完整字段见 [sessions 字典](#sessions登录会话表)。
 
 - 保留主键、UNIQUE(owner_id,id) 和 owner_id → users.id 的 RESTRICT 外键。
 - expires_at 登录时确定，此后不延长。idle_expires_at 在成功刷新后延长，最大不超过 expires_at。last_refreshed_at 初始等于 created_at，业务接口读取不延长空闲期限。
 - CHECK 保证 expires_at > created_at、last_refreshed_at >= created_at，以及 last_refreshed_at < idle_expires_at <= expires_at。
 - revoked_at 与 revoked_reason 同时为空或同时有值，非空撤销时间不得早于 created_at。原因使用稳定代码 logout、password_changed、refresh_reuse、account_disabled、admin、legacy_upgrade。
-- 当前的 token_hash 字段及其唯一约束在迁移中移除，令牌摘要统一由 refresh_tokens 管理。
+- 原 token_hash 字段及其唯一约束已由迁移移除，令牌摘要由 refresh_tokens 管理。
 
 ### 20.3 refresh_tokens｜刷新令牌表
 
-| 字段 | 类型 | 可空 | 默认值 | 备注 |
-| --- | --- | --- | --- | --- |
-| id | uuid PK | 否 | 服务端生成 | 刷新令牌ID |
-| owner_id | uuid | 否 | 无 | 所有者ID |
-| session_id | uuid | 否 | 无 | 会话ID |
-| parent_id | uuid | 是 | 无 | 前一令牌ID |
-| token_hash | text | 否 | 无 | 令牌哈希 |
-| created_at | timestamptz | 否 | CURRENT_TIMESTAMP | 签发时间 |
-| expires_at | timestamptz | 否 | 无 | 令牌到期时间 |
-| consumed_at | timestamptz | 是 | 无 | 使用时间 |
+完整字段见 [refresh_tokens 字典](#refresh_tokens刷新令牌表)。
 
 - token_hash 全局唯一，CHECK 限定为 64 位小写十六进制 SHA-256 摘要。
 - (owner_id,session_id) 通过复合外键引用 sessions(owner_id,id)，删除已结束会话时级联清理其刷新记录。
@@ -747,7 +752,7 @@ Access Token 由服务端签名，数据库不保存 JWT 原文。刷新令牌�
 | refresh_tokens UNIQUE(session_id) WHERE parent_id IS NULL | 每个会话只有一个初始令牌 |
 | refresh_tokens UNIQUE(session_id) WHERE consumed_at IS NULL | 每个会话至多一个尚未使用的令牌 |
 
-索引随下一次迁移创建，查询计划在实现时核验。不在部分索引条件中使用随时间变化的 now()。刷新查到 token_hash 后锁定会话并复查状态，不能仅凭命中未使用令牌的索引认定可刷新。
+以上索引已在迁移中创建，真实负载下的查询计划在业务实现时核验。不在部分索引条件中使用随时间变化的 now()。刷新查到 token_hash 后锁定会话并复查状态，不能仅凭命中未使用令牌的索引认定可刷新。
 
 ### 20.5 登录与轮换事务
 
@@ -773,9 +778,9 @@ JWT 校验签名、算法白名单、iss、aud、exp 及 sub/sid。按 sub 与 s
 - 应用层的个人内容备份不包含会话、刷新令牌或签名密钥。数据库运维备份仍按生产备份策略保护。
 - 升级时先增加会话新字段并创建 refresh_tokens，补齐旧行时间。旧会话统一标记 legacy_upgrade 并要求重新登录，保留 users 和全部个人业务数据。
 - 校验旧行、新约束及新旧服务部署顺序后移除 sessions.token_hash。模型注册、字段备注、字典及 ER 同一变更同步，不改写已执行的初始迁移。
-- 降级不得保留新令牌为有效旧会话。需要降级时先撤销全部会话，再按旧结构生成不可用于真实登录的随机占位摘要并重建约束，用户重新登录。降级不会恢复已撤销凭据。
+- 降级不得保留新令牌为有效旧会话。需要降级时先撤销全部会话，再按旧结构生成不可用于真实登录的随机占位值并重建约束，用户重新登录。降级不会恢复已撤销凭据。
 
-### 20.8 验证要求
+### 20.8 验证范围
 
 - 旧结构升级后账号及笔记保留，旧会话失效，新字段非空、时间约束和中文 COMMENT 正确。
 - 同用户不同会话互不混用，跨用户、跨会话的 parent_id 被外键拒绝，重复摘要和同会话两个未使用令牌被唯一约束拒绝。
@@ -784,4 +789,6 @@ JWT 校验签名、算法白名单、iss、aud、exp 及 sub/sid。按 sub 与 s
 - 退出撤销当前会话，改密码撤销所有会话，停用用户后新请求被拒绝。
 - 绝对及空闲到期、Cookie 与服务端期限一致，清理任务保留未到绝对期限的旧令牌历史。
 
-Access Token 有效期、刷新空闲期与会话绝对期限使用配置参数，具体数值在认证实现前确定。
+本轮完整回归通过 57 项测试，包含旧结构中有效和已过期会话的升级、回滚与再次升级、数据保留、时间与归属约束、级联清理和失败写入回滚。迁移用例在 luma_dev 的临时 schema 中执行，DDL 与数据均随测试事务回滚，不修改公共 schema 的迁移版本。认证服务现已通过真实双连接并发刷新、JWT 签发失败回滚、Cookie 交互、重用撤销及退出立即失效验证。密码修改、清理任务及浏览器多标签页协调仍待实现验证。
+
+Access Token、刷新空闲期与会话绝对期限分别默认 900、604800、2592000 秒，使用环境配置维护。

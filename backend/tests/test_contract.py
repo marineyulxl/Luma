@@ -9,7 +9,28 @@ from openapi_spec_validator import validate
 from pydantic import ValidationError
 
 from app.api.contract import record_contract
+from app.main import create_app
 from app.modules.content.schemas import ContentCreate, ContentPatch
+
+
+def test_implemented_contract_matches_registered_routes():
+    runtime = create_app().openapi()
+    for path, methods in record_contract()["paths"].items():
+        for method, operation in methods.items():
+            if method not in {"get", "post", "patch", "put", "delete"}:
+                continue
+            if operation.get("x-implementation-status") != "implemented":
+                continue
+            actual = runtime["paths"][path][method]
+            assert actual["operationId"] == operation["operationId"]
+            assert actual.get("security", []) == operation["security"]
+            if "requestBody" in operation:
+                assert actual["requestBody"] == operation["requestBody"]
+            for status in ("200", "204"):
+                if status in operation["responses"]:
+                    assert actual["responses"][status].get("content") == operation["responses"][
+                        status
+                    ].get("content")
 
 
 def test_openapi_contract_valid_and_export_in_sync():
@@ -25,7 +46,15 @@ def test_openapi_contract_valid_and_export_in_sync():
         if method in {"get", "post", "patch", "put", "delete"}
     ]
     assert len(operations) == 93
-    assert all(op["x-implementation-status"] == "planned" for op in operations)
+    implemented = {"sessions_create", "sessions_refresh", "sessions_delete", "account_detail"}
+    assert {
+        op["operationId"] for op in operations if op["x-implementation-status"] == "implemented"
+    } == implemented
+    assert all(
+        op["x-implementation-status"] == "planned"
+        for op in operations
+        if op["operationId"] not in implemented
+    )
     assert len({op["operationId"] for op in operations}) == len(operations)
     for op in operations:
         expected_auth = op["tags"] != ["public"] and op["operationId"] != "sessions_create"

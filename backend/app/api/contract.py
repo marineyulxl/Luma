@@ -391,9 +391,30 @@ def record_contract() -> dict[str, Any]:
         "responses"
     ]["204"]["headers"]
     contract["info"]["description"] = (
-        "V1.0 接口定义，业务路由尚未注册。业务鉴权使用 JWT Bearer，刷新凭据使用 HttpOnly Cookie。"
+        "V1.0 接口定义。登录、刷新、退出与当前用户接口已实现，其他操作按阶段交付。"
+        "业务鉴权使用 JWT Bearer，刷新凭据使用 HttpOnly Cookie。"
     )
-    contract["x-pending-decisions"] = ["令牌有效期参数", "请求与文件上限", "HTML 展示权限"]
+    contract["x-pending-decisions"] = ["请求与文件上限", "HTML 展示权限"]
+    for path, method in (
+        ("/api/auth/sessions", "post"),
+        ("/api/auth/sessions/refresh", "post"),
+        ("/api/auth/sessions/current", "delete"),
+        ("/api/account", "get"),
+    ):
+        contract["paths"][path][method]["x-implementation-status"] = "implemented"
+        if method == "post":
+            contract["paths"][path][method]["parameters"] = [
+                {"name": "Origin", "in": "header", "required": True, "schema": {"type": "string"}}
+            ]
+    logout["parameters"] = [
+        {
+            "name": "Origin",
+            "in": "header",
+            "required": False,
+            "description": "使用刷新 Cookie 退出时必须提供允许的来源",
+            "schema": {"type": "string"},
+        }
+    ]
     contract["paths"]["/api/auth/sessions"]["post"]["responses"]["401"] = response(
         "ErrorResponse", "账号或密码错误，统一提示，不泄露账号存在性"
     )

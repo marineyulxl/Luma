@@ -4,10 +4,10 @@
 
 ```mermaid
 flowchart LR
-    Studio["Studio / React + Vite<br/>规划"] --> API["FastAPI<br/>健康检查与应用基础已实现"]
+    Studio["Studio / React + Vite<br/>规划"] --> API["FastAPI<br/>健康检查与认证已实现"]
     Site["Site / Next.js<br/>规划"] --> API
-    API --> Modules["业务模块<br/>目前只有模型和部分契约"]
-    Modules --> DB[("PostgreSQL<br/>22 张业务表已建立")]
+    API --> Modules["业务模块<br/>模型、完整契约与所有者初始化"]
+    Modules --> DB[("PostgreSQL<br/>23 张业务表已建立")]
     Modules -. 附件存储待实现 .-> Files[原始文件与图片]
 ```
 
@@ -20,6 +20,7 @@ flowchart LR
 | API | FastAPI + Pydantic | 请求校验、依赖注入与 OpenAPI |
 | 配置 | pydantic-settings | 环境变量解析、类型校验及生产边界 |
 | 持久化 | PostgreSQL + SQLAlchemy 2.x + psycopg 3 | 统一事务、约束、类型化模型与 PostgreSQL 能力 |
+| 密码哈希 | pwdlib[argon2] / Argon2id | 使用成熟实现生成与验证哈希 |
 | 迁移 | Alembic | 显式版本化升级，不在应用启动时自动建表 |
 | 开发工具 | uv、Ruff、mypy、pytest | 锁定依赖、格式检查、类型检查与自动化测试 |
 | 部署 | Docker / Compose | 后续复用部署配置，当前本地直接运行 |
@@ -40,11 +41,13 @@ backend/
 │       ├── attachments/        # 文件元数据与记录附件关系
 │       └── ingestion/          # 来源版本、导入批次、处理尝试与解析结果
 ├── migrations/                 # Alembic 版本
-├── scripts/                    # 契约导出、空库迁移验证
+├── scripts/                    # 所有者初始化、契约导出、空库迁移验证
 └── tests/
 ```
 
 模块按业务领域划分，共享一个 Declarative Base。跨模块外键通过表名关联，app/db/models.py 统一注册，避免循环导入。新增 router、service、schemas 等文件随功能引入，不提前铺空目录。
+
+所有者初始化由 scripts/init_owner.py 交互入口、accounts/schemas.py 输入校验及 accounts/service.py 事务用例组成。哈希计算在事务外进行，事务内锁定 users 表并检查空表，再插入账号；提交成功后返回不含密码哈希的结果。登录、刷新、当前用户与退出接口已实现，认证事务在 accounts/auth_service.py，HTTP 适配在 accounts/router.py，JWT 和限流在 accounts/security.py。
 
 ## 请求与事务
 
@@ -127,9 +130,9 @@ V1.0 Release 提供人工思考主题与成员关系。主题引用现有记录�
 
 业务接口使用 JWT Bearer Access Token，Web 端仅在内存持有。随机 Refresh Token 保存到 HttpOnly Cookie，服务端保存哈希及会话状态，刷新时原子轮换。JWT 包含会话标识，业务请求验证 JWT 并检查会话有效性，以支持退出即时失效和改密码撤销全部会话。
 
-刷新使用 Cookie，Access Token 过期不影响刷新操作。登录、刷新及 Cookie 退出校验请求来源，Cookie 的 Secure、SameSite 和作用路径按 API 规格配置。前端通过单次刷新协调和跨标签页同步避免并发重用刷新令牌。未来 App 使用系统安全存储，令牌有效期参数另行确定。
+刷新使用 Cookie，Access Token 过期不影响刷新操作。登录、刷新及 Cookie 退出校验请求来源，Cookie 的 Secure、SameSite 和作用路径按 API 规格配置。前端通过单次刷新协调和跨标签页同步避免并发重用刷新令牌。未来 App 使用系统安全存储。Access Token 默认 15 分钟，刷新空闲期 7 天，单次会话最长 30 天；通过环境配置调整。
 
-当前已有会话基础表和契约，JWT 签发、刷新轮换和会话撤销业务尚未实现。持久化采用 sessions 管理会话与撤销，refresh_tokens 保存历史摘要和前序关系；目标字段、约束、轮换事务及迁移规则见 [数据库认证设计](DATABASE-DESIGN.md#20-双令牌认证设计)。该目标结构尚未迁移。
+当前已实现所有者登录、HS256 JWT 签发与严格校验、刷新轮换和会话撤销；密码修改和管理员重置仍待实现。生产必须提供稳定随机签名密钥，开发默认使用进程临时密钥。持久化采用 sessions 管理会话与撤销，refresh_tokens 保存历史摘要和前序关系；字段、约束、轮换事务及迁移规则见 [数据库认证设计](DATABASE-DESIGN.md#20-双令牌认证设计)。该结构已通过 9c3d8a1f6b20 迁移建立，四个认证接口已接入。限流采用有容量上限的单进程内存计数，当前单 worker 运行，扩为多实例前使用共享计数。
 
 ## 安全与部署边界
 
@@ -143,7 +146,7 @@ V1.0 Release 提供人工思考主题与成员关系。主题引用现有记录�
 
 ## 待确定
 
-- 访问令牌和刷新会话有效期、登录限流和密码策略参数，记录请求及文件上限。
+- 记录请求及文件上限。
 - 是否增加 RLS、生产 PostgreSQL 版本、连接池规模、附件存储、备份恢复与中文检索性能目标；本机已在 PostgreSQL 16.14 验证。
 - 采集 worker 的进程组织、解析库版本和复杂文件转换约束。
 - 未来连接器的游标、外部删除标记与授权撤回；未来 RAG、Memory、Agent 不提前创建整套物理表。

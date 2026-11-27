@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, Field, HttpUrl, SecretStr, model_validator
 
+from app.modules.accounts.schemas import NewPassword
 from app.modules.content.schemas import ApiModel, ContentDetail, ContentSummary, Document
 
 
@@ -20,8 +21,8 @@ class AccountDetail(ApiModel):
 
 
 class LoginRequest(ApiModel):
-    username: str = Field(min_length=1)
-    password: SecretStr
+    username: str = Field(min_length=1, max_length=1024)
+    password: SecretStr = Field(max_length=128)
 
 
 class SessionDetail(ApiModel):
@@ -38,7 +39,7 @@ class AccountPatch(ApiModel):
 
 class PasswordChange(ApiModel):
     current_password: SecretStr
-    new_password: SecretStr
+    new_password: NewPassword
 
 
 class NamedCreate(ApiModel):

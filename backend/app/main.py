@@ -16,6 +16,14 @@ from app.api.health import router as health_router
 from app.api.schemas import ErrorDetail, ErrorResponse
 from app.core.config import Settings
 from app.db.session import build_engine, build_session_factory
+from app.modules.accounts.router import router as accounts_router
+from app.modules.accounts.security import (
+    COOKIE_NAME,
+    COOKIE_PATH,
+    AuthError,
+    RequestLimiter,
+    TokenSecurity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +36,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = build_engine(config)
         app.state.database = DatabaseResources(engine, build_session_factory(engine))
         try:
+            app.state.token_security = await run_in_threadpool(TokenSecurity, config)
+            app.state.auth_limiter = RequestLimiter()
             yield
         finally:
             await run_in_threadpool(engine.dispose)
@@ -45,10 +55,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=config.cors_origins,
-            allow_methods=["GET", "POST", "PATCH", "DELETE"],
+            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
             allow_headers=["Content-Type", "Authorization"],
-            allow_credentials=False,
+            allow_credentials=True,
         )
+
+    @app.exception_handler(AuthError)
+    async def authentication_error(request: Request, error: AuthError) -> JSONResponse:
+        response = JSONResponse(
+            status_code=error.status,
+            content=ErrorResponse(code=error.code, message=error.message).model_dump(),
+            headers={"Cache-Control": "no-store"},
+        )
+        if error.status == 401:
+            response.headers["WWW-Authenticate"] = "Bearer"
+            if request.url.path.startswith(COOKIE_PATH):
+                response.delete_cookie(
+                    COOKIE_NAME, path=COOKIE_PATH, httponly=True, secure=production, samesite="lax"
+                )
+        if error.retry_after is not None:
+            response.headers["Retry-After"] = str(error.retry_after)
+        return response
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, error: HTTPException) -> JSONResponse:
@@ -80,4 +107,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(accounts_router)
     return app

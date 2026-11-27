@@ -1,10 +1,14 @@
 """真实 PostgreSQL 集成测试；每个用例结束回滚，不保留测试数据。"""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, delete, insert, inspect, select, update
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, delete, insert, inspect, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from app.db.config import database_url
@@ -15,6 +19,8 @@ from app.db.models import (
     ContentBody,
     ContentRelation,
     IndexJob,
+    RefreshToken,
+    SessionToken,
     Space,
     User,
 )
@@ -307,3 +313,160 @@ def test_session_transaction_commit_and_rollback(db):
             session.flush()
             raise RuntimeError("abort")
     assert db.scalar(select(User.id).where(User.id == failed)) is None
+
+
+@pytest.fixture
+def migration_schema(db):
+    # All DDL and test rows remain inside the existing rollback-only transaction.
+    schema = "auth_migration_" + uuid4().hex
+    db.execute(text(f'CREATE SCHEMA "{schema}"'))
+    db.execute(text(f'SET LOCAL search_path TO "{schema}"'))
+    cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    cfg.attributes["connection"] = db
+    return cfg
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_auth_migration_preserves_data_and_never_reactivates_legacy_sessions(
+    db, migration_schema, expired
+):
+    public_revision = db.scalar(text("SELECT version_num FROM public.alembic_version"))
+    command.upgrade(migration_schema, "782568a18b39")
+    owner = user(db)
+    content = record(db, owner, title="keep across migration")
+    session_id = uuid4()
+    now = datetime.now(UTC)
+    db.execute(
+        text("""
+            INSERT INTO sessions (id, owner_id, token_hash, expires_at, created_at)
+            VALUES (:id, :owner, 'legacy-test-only', :expires, :created)
+        """),
+        {
+            "id": session_id,
+            "owner": owner,
+            "expires": now + timedelta(days=-1 if expired else 1),
+            "created": now,
+        },
+    )
+    command.upgrade(migration_schema, "head")
+    session = db.execute(select(SessionToken).where(SessionToken.id == session_id)).mappings().one()
+    assert session["revoked_at"] is not None
+    assert session["revoked_reason"] == "legacy_upgrade"
+    assert session["expires_at"] > session["created_at"]
+    assert session["idle_expires_at"] == session["expires_at"]
+    assert db.scalar(select(Content.title).where(Content.id == content)) == "keep across migration"
+    assert db.scalar(select(User.id).where(User.id == owner)) == owner
+    assert "token_hash" not in {c["name"] for c in inspect(db).get_columns("sessions")}
+    command.downgrade(migration_schema, "782568a18b39")
+    legacy = (
+        db.execute(
+            text("SELECT token_hash, revoked_at FROM sessions WHERE id=:id"), {"id": session_id}
+        )
+        .mappings()
+        .one()
+    )
+    assert legacy["token_hash"].startswith("revoked:")
+    assert legacy["revoked_at"] is not None
+    assert not inspect(db).has_table("refresh_tokens")
+    assert db.scalar(select(Content.title).where(Content.id == content)) == "keep across migration"
+    command.upgrade(migration_schema, "head")
+    assert (
+        db.scalar(select(SessionToken.revoked_reason).where(SessionToken.id == session_id))
+        == "legacy_upgrade"
+    )
+    assert db.scalar(text("SELECT version_num FROM public.alembic_version")) == public_revision
+
+
+def login_session(db, owner):
+    now = datetime.now(UTC)
+    return add(
+        db,
+        SessionToken,
+        owner_id=owner,
+        created_at=now,
+        last_refreshed_at=now,
+        idle_expires_at=now + timedelta(days=1),
+        expires_at=now + timedelta(days=2),
+    )
+
+
+def refresh_token(db, owner, session_id, **values):
+    now = datetime.now(UTC)
+    payload = {
+        "owner_id": owner,
+        "session_id": session_id,
+        "token_hash": sha256(uuid4().bytes).hexdigest(),
+        "created_at": now,
+        "expires_at": now + timedelta(hours=1),
+    }
+    payload.update(values)
+    return add(db, RefreshToken, **payload)
+
+
+def test_auth_session_expiry_and_revocation_constraints(db):
+    session = login_session(db, user(db))
+    changes = (
+        {"expires_at": session["created_at"]},
+        {"idle_expires_at": session["expires_at"] + timedelta(seconds=1)},
+        {"last_refreshed_at": session["created_at"] - timedelta(seconds=1)},
+        {"revoked_at": datetime.now(UTC)},
+        {"revoked_reason": "logout"},
+        {"revoked_at": datetime.now(UTC), "revoked_reason": "unknown"},
+    )
+    for values in changes:
+        rejects(
+            db,
+            lambda values=values: db.execute(
+                update(SessionToken).where(SessionToken.id == session["id"]).values(**values)
+            ),
+            "23514",
+        )
+
+
+def test_refresh_history_constraints_and_session_cascade(db):
+    owner, other_owner = user(db), user(db)
+    session = login_session(db, owner)
+    other_session = login_session(db, owner)
+    foreign_session = login_session(db, other_owner)
+    rejects(db, lambda: refresh_token(db, owner, session["id"], token_hash="raw-token"), "23514")
+    root = refresh_token(db, owner, session["id"])
+    rejects(db, lambda: refresh_token(db, owner, session["id"]), "23505")
+    rejects(
+        db,
+        lambda: refresh_token(db, owner, other_session["id"], token_hash=root["token_hash"]),
+        "23505",
+    )
+    rejects(db, lambda: refresh_token(db, owner, foreign_session["id"]), "23503")
+    rejects(
+        db, lambda: refresh_token(db, owner, other_session["id"], parent_id=root["id"]), "23503"
+    )
+    db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.id == root["id"])
+        .values(consumed_at=datetime.now(UTC))
+    )
+    child = refresh_token(db, owner, session["id"], parent_id=root["id"])
+    rejects(db, lambda: refresh_token(db, owner, session["id"], parent_id=root["id"]), "23505")
+    assert (
+        db.scalar(select(RefreshToken.parent_id).where(RefreshToken.id == child["id"]))
+        == root["id"]
+    )
+    db.execute(delete(SessionToken).where(SessionToken.id == session["id"]))
+    assert (
+        db.scalar(select(RefreshToken.id).where(RefreshToken.session_id == session["id"])) is None
+    )
+
+
+def test_failed_rotation_rolls_back_parent_consumption(db):
+    owner = user(db)
+    session = login_session(db, owner)
+    root = refresh_token(db, owner, session["id"])
+    with pytest.raises(IntegrityError):
+        with db.begin_nested():
+            db.execute(
+                update(RefreshToken)
+                .where(RefreshToken.id == root["id"])
+                .values(consumed_at=datetime.now(UTC))
+            )
+            refresh_token(db, owner, session["id"], parent_id=root["id"], token_hash="invalid")
+    assert db.scalar(select(RefreshToken.consumed_at).where(RefreshToken.id == root["id"])) is None

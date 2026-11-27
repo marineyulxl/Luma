@@ -12,9 +12,9 @@
 
 | 能力 | 状态 |
 | --- | --- |
-| 数据库 | 22 张业务表与迁移可用 |
-| 后端基础 | 配置、事务、健康检查和开发文档可用 |
-| 业务 API | V1.0 全部业务契约已建立，业务接口待实现 |
+| 数据库 | 23 张业务表与迁移可用 |
+| 后端基础 | 配置、事务、健康检查和所有者初始化命令可用 |
+| 业务 API | 登录、刷新、当前用户与退出可用，其余接口待实现 |
 | Studio | 静态交互原型，正式前端待实现 |
 | Site、AI、生产部署 | 后续阶段 |
 
@@ -36,13 +36,14 @@ uv run --locked alembic upgrade head
 uv run --locked uvicorn app.main:create_app --factory --reload --host 127.0.0.1 --port 8000
 ```
 
-打开 http://127.0.0.1:8000/docs 查看已实现的健康检查。首次建库、测试及问题排查见 [开发指南](docs/development/DEVELOPMENT.md)。
+打开 http://127.0.0.1:8000/docs 查看已实现的健康检查与认证接口。首次建库、测试及问题排查见 [开发指南](docs/development/DEVELOPMENT.md)。
 
 ## 文档
 
 | 你想做什么 | 阅读入口 |
 | --- | --- |
 | 启动、测试或修改后端 | [开发指南](docs/development/DEVELOPMENT.md) |
+| 查测试用例和人工验收结果 | [测试与验收](docs/development/TESTING.md) |
 | 理解模块和数据流 | [系统设计](docs/architecture/ARCHITECTURE.md) |
 | 核对功能范围和验收结果 | [产品需求](docs/product/PRD.md) |
 | 查表、字段和约束 | [数据库设计](docs/architecture/DATABASE-DESIGN.md) |
@@ -53,4 +54,4 @@ uv run --locked uvicorn app.main:create_app --factory --reload --host 127.0.0.1 
 
 ## 下一步
 
-确定会话与正文校验边界，按记录契约实现新建、保存、详情和列表，接上 Studio 验证可用链路。V1.0 保留人工思考主题、记录成员和时间线，并覆盖中英文及移动端核心操作。第一阶段不接 AI。
+接入 Studio 登录页，验证登录、刷新保持状态和退出，再按记录契约实现新建、保存、详情和列表。V1.0 保留人工思考主题、记录成员和时间线，并覆盖中英文及移动端核心操作。第一阶段不接 AI。
